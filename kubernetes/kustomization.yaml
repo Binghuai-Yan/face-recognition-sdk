@@ -1,0 +1,36 @@
+# File: facesdk/kubernetes/kustomization.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# FaceSDK Kustomization Configuration
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: facesdk
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres-deployment.yaml
+  - redis-deployment.yaml
+  - compreface-deployment.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/name: facesdk
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/managed-by: kubectl
+
+images:
+  - name: exadel/compreface
+    newTag: "1.2.0"
+  - name: postgres
+    newTag: "15-alpine"
+  - name: redis
+    newTag: "7-alpine"
+
+replicas:
+  - name: compreface-api
+    count: 2

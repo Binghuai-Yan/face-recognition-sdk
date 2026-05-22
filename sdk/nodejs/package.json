@@ -1,0 +1,38 @@
+{
+  "name": "facesdk-nodejs",
+  "version": "1.0.0",
+  "description": "Node.js SDK for FaceSDK - A comprehensive face recognition solution",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "face",
+    "recognition",
+    "detection",
+    "biometric",
+    "compreface",
+    "sdk"
+  ],
+  "author": "FaceSDK Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/facesdk/facesdk-nodejs.git"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

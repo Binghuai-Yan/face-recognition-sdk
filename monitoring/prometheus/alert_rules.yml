@@ -1,0 +1,92 @@
+# File: facesdk/monitoring/prometheus/alert_rules.yml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# Prometheus Alert Rules for FaceSDK
+
+groups:
+  - name: facesdk_alerts
+    interval: 30s
+    rules:
+      # API 服务可用性告警
+      - alert: FaceSDKAPIDown
+        expr: up{job="facesdk-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FaceSDK API 服务不可用"
+          description: "FaceSDK API 服务已停止响应超过 1 分钟"
+
+      # 高错误率告警
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{job="facesdk-api",code=~"5.."}[5m]))
+          / sum(rate(http_requests_total{job="facesdk-api"}[5m])) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 错误率过高"
+          description: "5xx 错误率达到 {{ $value | printf \"%.2f\" }}%，超过 5% 阈值"
+
+      # 高延迟告警
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="facesdk-api"}[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API 响应延迟过高"
+          description: "P95 延迟达到 {{ $value | printf \"%.2f\" }}s，超过 2s 阈值"
+
+      # PostgreSQL 连接告警
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL 数据库不可用"
+          description: "PostgreSQL 数据库已停止响应超过 1 分钟"
+
+      # Redis 连接告警
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis 缓存不可用"
+          description: "Redis 缓存已停止响应超过 1 分钟"
+
+      # 高内存使用告警
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "内存使用率过高"
+          description: "内存使用率达到 {{ $value | printf \"%.1f\" }}%，超过 85% 阈值"
+
+      # 高 CPU 使用告警
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU 使用率过高"
+          description: "CPU 使用率达到 {{ $value | printf \"%.1f\" }}%，超过 85% 阈值"
+
+      # 磁盘空间告警
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "磁盘空间不足"
+          description: "磁盘剩余空间低于 15%"

@@ -1,0 +1,441 @@
+# File: facesdk/sdk/openapi/compreface-api.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# FaceSDK OpenAPI 3.0 Specification
+# Based on CompreFace API
+
+openapi: 3.0.3
+info:
+  title: FaceSDK API
+  description: |
+    FaceSDK 提供完整的人脸识别 REST API，基于 CompreFace 引擎。
+    
+    功能包括：
+    - 人脸检测
+    - 人脸比对（1:1）
+    - 人脸识别（1:N）
+    - 人脸库管理
+    - 人脸管理
+  version: 1.0.0
+  contact:
+    name: FaceSDK Team
+    email: team@facesdk.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: 本地开发服务器
+  - url: https://api.facesdk.io
+    description: 生产服务器
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /api/v1/detection/detect:
+    post:
+      summary: 人脸检测
+      description: 检测图片中的人脸，返回人脸位置、置信度和质量评分
+      tags:
+        - Detection
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 图片文件（JPG、PNG）
+                limit:
+                  type: integer
+                  default: 1
+                  description: 最多返回的人脸数量
+                det_prob_threshold:
+                  type: number
+                  default: 0.8
+                  description: 检测置信度阈值
+      responses:
+        '200':
+          description: 检测成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DetectionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/recognition/compare:
+    post:
+      summary: 人脸比对
+      description: 比对两张人脸图片，返回相似度
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file1:
+                  type: string
+                  format: binary
+                  description: 第一张图片
+                file2:
+                  type: string
+                  format: binary
+                  description: 第二张图片
+      responses:
+        '200':
+          description: 比对成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompareResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/recognition/recognize:
+    post:
+      summary: 人脸识别（1:N）
+      description: 在人脸库中搜索相似人脸
+      tags:
+        - Recognition
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 待搜索图片
+                limit:
+                  type: integer
+                  default: 1
+                  description: 返回结果数量
+                threshold:
+                  type: number
+                  default: 0.0
+                  description: 相似度阈值
+      responses:
+        '200':
+          description: 识别成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/recognition/subjects:
+    get:
+      summary: 列出所有人脸库
+      description: 获取所有人脸库列表
+      tags:
+        - Subjects
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subjects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Subject'
+    post:
+      summary: 创建人脸库
+      description: 创建新的人脸库
+      tags:
+        - Subjects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject:
+                  type: string
+                  description: 人脸库 ID
+                name:
+                  type: string
+                  description: 人脸库名称
+              required:
+                - subject
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+
+  /api/v1/recognition/subjects/{subject}:
+    delete:
+      summary: 删除人脸库
+      description: 删除指定人脸库及其所有人脸
+      tags:
+        - Subjects
+      parameters:
+        - name: subject
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/recognition/faces:
+    post:
+      summary: 添加人脸
+      description: 添加人脸图片到指定人脸库
+      tags:
+        - Faces
+      parameters:
+        - name: subject
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 人脸库 ID
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 人脸图片
+                metadata:
+                  type: string
+                  description: JSON 格式的元数据
+      responses:
+        '200':
+          description: 添加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRecord'
+
+  /api/v1/recognition/faces/{face_id}:
+    delete:
+      summary: 删除人脸
+      description: 删除指定人脸
+      tags:
+        - Faces
+      parameters:
+        - name: face_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 删除成功
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /health:
+    get:
+      summary: 健康检查
+      description: 检查服务健康状态
+      tags:
+        - System
+      security: []
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "UP"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+
+  schemas:
+    BoundingBox:
+      type: object
+      properties:
+        x_min:
+          type: integer
+        y_min:
+          type: integer
+        x_max:
+          type: integer
+        y_max:
+          type: integer
+
+    Quality:
+      type: object
+      properties:
+        score:
+          type: number
+        brightness:
+          type: number
+        sharpness:
+          type: number
+
+    Face:
+      type: object
+      properties:
+        box:
+          $ref: '#/components/schemas/BoundingBox'
+        landmarks:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+        confidence:
+          type: number
+        quality:
+          $ref: '#/components/schemas/Quality'
+
+    DetectionResult:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: '#/components/schemas/Face'
+        image_id:
+          type: string
+        face_count:
+          type: integer
+
+    CompareResult:
+      type: object
+      properties:
+        similarity:
+          type: number
+        distance:
+          type: number
+        threshold:
+          type: number
+        is_match:
+          type: boolean
+        face1:
+          $ref: '#/components/schemas/Face'
+        face2:
+          $ref: '#/components/schemas/Face'
+
+    MatchResult:
+      type: object
+      properties:
+        subject:
+          type: string
+        similarity:
+          type: number
+        distance:
+          type: number
+        is_match:
+          type: boolean
+        face:
+          $ref: '#/components/schemas/Face'
+
+    SearchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchResult'
+        face_count:
+          type: integer
+        image_id:
+          type: string
+
+    Subject:
+      type: object
+      properties:
+        subject:
+          type: string
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    FaceRecord:
+      type: object
+      properties:
+        image_id:
+          type: string
+        subject:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+        code:
+          type: string
+
+  responses:
+    BadRequest:
+      description: 请求参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: 认证失败
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

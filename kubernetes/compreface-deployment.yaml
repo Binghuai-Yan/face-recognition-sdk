@@ -1,0 +1,187 @@
+# File: facesdk/kubernetes/compreface-deployment.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# CompreFace API Deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compreface-api
+  namespace: facesdk
+  labels:
+    app: compreface-api
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: compreface-api
+  template:
+    metadata:
+      labels:
+        app: compreface-api
+        component: api
+    spec:
+      containers:
+        - name: compreface-api
+          image: exadel/compreface:1.2.0
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: POSTGRES_URL
+              value: "postgresql://compreface:$(POSTGRES_PASSWORD)@postgres:5432/compreface"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: facesdk-secrets
+                  key: COMPREFACE_API_KEY
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: facesdk-secrets
+                  key: POSTGRES_PASSWORD
+            - name: LOGGING_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: LOGGING_LEVEL
+            - name: MAX_REQUEST_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: MAX_REQUEST_SIZE
+            - name: MAX_FILE_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: MAX_FILE_SIZE
+            - name: WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: WORKERS
+            - name: THREADS
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: THREADS
+            - name: TIMEOUT
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: TIMEOUT
+            - name: KEEP_ALIVE
+              valueFrom:
+                configMapKeyRef:
+                  name: facesdk-config
+                  key: KEEP_ALIVE
+          volumeMounts:
+            - name: compreface-data
+              mountPath: /app/data
+            - name: compreface-logs
+              mountPath: /app/logs
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+            limits:
+              memory: "8Gi"
+              cpu: "4000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: compreface-data
+          persistentVolumeClaim:
+            claimName: compreface-data-pvc
+        - name: compreface-logs
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: compreface-api
+  namespace: facesdk
+  labels:
+    app: compreface-api
+spec:
+  selector:
+    app: compreface-api
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: compreface-data-pvc
+  namespace: facesdk
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: compreface-api-hpa
+  namespace: facesdk
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: compreface-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 60

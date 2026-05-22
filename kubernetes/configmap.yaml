@@ -1,0 +1,30 @@
+# File: facesdk/kubernetes/configmap.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# FaceSDK ConfigMap - 非敏感配置
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: facesdk-config
+  namespace: facesdk
+data:
+  # CompreFace 配置
+  LOGGING_LEVEL: "INFO"
+  MAX_REQUEST_SIZE: "10485760"
+  MAX_FILE_SIZE: "10485760"
+  WORKERS: "4"
+  THREADS: "4"
+  TIMEOUT: "120"
+  KEEP_ALIVE: "5"
+  
+  # PostgreSQL 配置
+  POSTGRES_DB: "compreface"
+  POSTGRES_USER: "compreface"
+  
+  # Redis 配置
+  REDIS_MAXMEMORY: "512mb"
+  
+  # MinIO 配置
+  MINIO_ROOT_USER: "minioadmin"

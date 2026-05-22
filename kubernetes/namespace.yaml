@@ -1,0 +1,14 @@
+# File: facesdk/kubernetes/namespace.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# FaceSDK Kubernetes Namespace
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: facesdk
+  labels:
+    name: facesdk
+    app.kubernetes.io/name: facesdk
+    app.kubernetes.io/component: namespace

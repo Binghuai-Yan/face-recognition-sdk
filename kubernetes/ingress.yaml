@@ -1,0 +1,69 @@
+# File: facesdk/kubernetes/ingress.yaml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# FaceSDK Ingress Configuration
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: facesdk-ingress
+  namespace: facesdk
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "20m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - facesdk-api.yourdomain.com
+        - facesdk-ui.yourdomain.com
+      secretName: facesdk-tls
+  rules:
+    - host: facesdk-api.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: compreface-api
+                port:
+                  number: 80
+    - host: facesdk-ui.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: compreface-ui
+                port:
+                  number: 80
+
+---
+# 可选：使用 LoadBalancer 直接暴露服务（适用于云环境）
+apiVersion: v1
+kind: Service
+metadata:
+  name: compreface-api-lb
+  namespace: facesdk
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+spec:
+  type: LoadBalancer
+  selector:
+    app: compreface-api
+  ports:
+    - port: 80
+      targetPort: 80
+      name: http
+    - port: 443
+      targetPort: 80
+      name: https

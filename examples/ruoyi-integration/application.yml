@@ -1,0 +1,27 @@
+# File: facesdk/examples/ruoyi-integration/application.yml
+# Copyright (c) 2024 FaceSDK Contributors
+# MIT License
+#
+# Ruoyi 框架 FaceSDK 配置
+
+# FaceSDK 配置
+facesdk:
+  # API 服务地址
+  api-url: http://localhost:8000
+  # API 密钥
+  api-key: your-api-key-here
+  # 相似度阈值（0.0 - 1.0，建议 0.8）
+  similarity-threshold: 0.8
+  # 连接超时（毫秒）
+  connect-timeout: 5000
+  # 读取超时（毫秒）
+  read-timeout: 30000
+
+# 文件上传配置
+spring:
+  servlet:
+    multipart:
+      # 最大文件大小
+      max-file-size: 10MB
+      # 最大请求大小
+      max-request-size: 100MB
