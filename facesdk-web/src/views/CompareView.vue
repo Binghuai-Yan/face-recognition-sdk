@@ -60,21 +60,16 @@
           <div class="result-section" v-if="result">
             <h3>{{ $t('compare.result') }}</h3>
             <el-result
-              :icon="result.is_match ? 'success' : 'warning'"
-              :title="result.is_match ? $t('compare.yes') : $t('compare.no')"
+              :icon="isMatch ? 'success' : 'warning'"
+              :title="isMatch ? $t('compare.yes') : $t('compare.no')"
             />
             <el-descriptions :column="1" border>
               <el-descriptions-item :label="$t('compare.similarity')">
                 <el-progress 
-                  :percentage="(result.similarity * 100).toFixed(2)" 
-                  :color="result.is_match ? '#67C23A' : '#E6A23C'"
+                  :percentage="Number((similarity * 100).toFixed(2))" 
+                  :color="isMatch ? '#67C23A' : '#E6A23C'"
                 />
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('compare.distance')">
-                {{ result.distance?.toFixed(4) }}
-              </el-descriptions-item>
-              <el-descriptions-item :label="$t('compare.threshold')">
-                {{ result.threshold }}
+                <span style="margin-left: 10px">{{ (similarity * 100).toFixed(2) }}%</span>
               </el-descriptions-item>
             </el-descriptions>
           </div>
@@ -86,7 +81,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { compareFaces } from '@/api/face'
@@ -97,6 +92,26 @@ const imageUrl1 = ref('')
 const imageUrl2 = ref('')
 const loading = ref(false)
 const result = ref(null)
+
+// CompreFace Verification API 返回结果解析
+const similarity = computed(() => {
+  // API 返回 { result: [...] }，需要取 result.result
+  const resultArray = result.value?.result || result.value
+  console.log('Result array:', JSON.stringify(resultArray))
+  if (!resultArray || !Array.isArray(resultArray) || resultArray.length === 0) {
+    return 0
+  }
+  const firstResult = resultArray[0]
+  if (firstResult.face_matches && firstResult.face_matches.length > 0) {
+    return firstResult.face_matches[0].similarity || 0
+  }
+  return 0
+})
+
+const isMatch = computed(() => {
+  // 相似度大于 0.5 认为是同一个人
+  return similarity.value > 0.5
+})
 
 const handleImageChange = (file, index) => {
   if (index === 1) {
@@ -117,8 +132,8 @@ const handleCompare = async () => {
   loading.value = true
   try {
     const formData = new FormData()
-    formData.append('file1', image1.value)
-    formData.append('file2', image2.value)
+    formData.append('source_image', image1.value)
+    formData.append('target_image', image2.value)
     
     const res = await compareFaces(formData)
     result.value = res

@@ -5,7 +5,8 @@
     "compare": "Face Compare",
     "search": "Face Search",
     "subjects": "Subjects",
-    "settings": "Settings"
+    "settings": "Settings",
+    "api": "API Docs"
   },
   "common": {
     "submit": "Submit",
@@ -37,7 +38,22 @@
     "landmarks": "Landmarks",
     "quality": "Quality Score",
     "brightness": "Brightness",
-    "sharpness": "Sharpness"
+    "sharpness": "Sharpness",
+    "configTitle": "Detection Config",
+    "extraFeatures": "Extra Features",
+    "detThreshold": "Detection Threshold",
+    "age": "Age Detection",
+    "gender": "Gender Detection",
+    "pose": "3D Pose Detection",
+    "qualityCheck": "Image Quality Check",
+    "liveness": "RGB Liveness Detection",
+    "years": "years",
+    "male": "Male",
+    "female": "Female",
+    "live": "Live",
+    "spoof": "Spoof",
+    "thresholdHint": "Threshold recommendations: Detection 0.5, Liveness 0.5, Face Comparison 0.80~0.82",
+    "livenessHint": "RGB Liveness threshold 0.5, above this value is considered live (real person)"
   },
   "compare": {
     "title": "Face Comparison",
@@ -86,10 +102,60 @@
     "apiConfig": "API Configuration",
     "apiUrl": "API URL",
     "apiKey": "API Key",
+    "apiKeyHint": "CompreFace Detection, Recognition, and Verification are separate services, each requiring its own API Key",
     "save": "Save Settings"
   },
   "language": {
     "zh": "简体中文",
     "en": "English"
+  },
+  "api": {
+    "title": "FaceSDK API Documentation",
+    "intro": "FaceSDK provides face recognition services based on CompreFace, supporting face detection, face comparison, face search, subject management, and RGB liveness detection.",
+    "headers": "Headers",
+    "params": "Parameters",
+    "paramName": "Name",
+    "paramType": "Type",
+    "required": "Required",
+    "description": "Description",
+    "yes": "Yes",
+    "no": "No",
+    "example": "Example Request",
+    "response": "Response Example",
+    "yourApiKey": "YOUR_API_KEY",
+    "thresholdTitle": "Threshold Reference",
+    "detectionThreshold": "Face Detection Threshold",
+    "livenessThreshold": "Liveness Detection Threshold",
+    "livenessHint2": "Above 0.5 is live",
+    "compareThreshold1": "Face Comparison Threshold (Life Photos)",
+    "compareThreshold2": "Face Comparison Threshold (ID Photos)",
+    "compareHint1": "Recommended 0.80",
+    "compareHint2": "Recommended 0.82",
+    "detection": {
+      "desc": "Face Detection - Detect face locations and features in images",
+      "apiKey": "API Key for Detection service",
+      "paramFile": "Image file to detect (JPG/PNG)",
+      "paramThreshold": "Detection threshold, range 0-1, default 0.5, faces below this value will be filtered",
+      "paramPlugins": "Extended feature plugins, optional: age,gender,pose,landmarks,quality"
+    },
+    "verification": {
+      "desc": "Face Verification (1:1) - Compare similarity between two face images",
+      "apiKey": "API Key for Verification service",
+      "paramSource": "Source image (first face image)",
+      "paramTarget": "Target image (second face image)"
+    },
+    "recognition": {
+      "desc": "Face Recognition (1:N) - Search for similar faces in the database",
+      "apiKey": "API Key for Recognition service",
+      "paramFile": "Face image to search",
+      "paramLimit": "Maximum number of results, default 5",
+      "paramThreshold": "Similarity threshold, range 0-1, default 0.8, results below this value will be filtered"
+    },
+    "antispoofing": {
+      "desc": "RGB Liveness Detection - Determine if the face in the image is a real person",
+      "apiKey": "API Key for Anti-spoofing service",
+      "paramFile": "Image file to check",
+      "hint": "Return value range 0-1, above 0.5 is considered live (real person), below 0.5 is considered non-live (attack)"
+    }
   }
 }

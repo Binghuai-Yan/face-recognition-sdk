@@ -81,7 +81,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { getSubjects, createSubject, deleteSubject, addFace } from '@/api/face'
+import { getSubjects, createSubject, deleteSubject, addFace, getFaces } from '@/api/face'
 
 const subjects = ref([])
 const loading = ref(false)
@@ -103,7 +103,18 @@ const fetchSubjects = async () => {
   loading.value = true
   try {
     const res = await getSubjects()
-    subjects.value = res.map(s => ({ subject: s, name: '' }))
+    // 获取每个人脸库的人脸数量
+    const subjectsWithFaces = await Promise.all(
+      res.map(async (subjectId) => {
+        try {
+          const faces = await getFaces(subjectId)
+          return { subject: subjectId, name: '', faces: faces || [] }
+        } catch (e) {
+          return { subject: subjectId, name: '', faces: [] }
+        }
+      })
+    )
+    subjects.value = subjectsWithFaces
   } catch (error) {
     ElMessage.error(error.message || 'Failed to load subjects')
   } finally {
@@ -134,7 +145,9 @@ const handleCreate = async () => {
 const handleDelete = async (subjectId) => {
   try {
     await ElMessageBox.confirm(
+      // eslint-disable-next-line no-undef
       $t('subjects.deleteConfirm'),
+      // eslint-disable-next-line no-undef
       $t('common.confirm'),
       { type: 'warning' }
     )
@@ -172,7 +185,7 @@ const submitAddFace = async () => {
     showAddFaceDialog.value = false
     fetchSubjects()
   } catch (error) {
-    ElMessage.error(error.message || 'Failed to add face')
+    ElMessage.error(error.response?.data?.message || error.message || 'Failed to add face')
   } finally {
     addingFace.value = false
   }

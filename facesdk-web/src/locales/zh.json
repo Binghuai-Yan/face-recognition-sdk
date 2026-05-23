@@ -5,7 +5,8 @@
     "compare": "人脸比对",
     "search": "人脸搜索",
     "subjects": "人脸库管理",
-    "settings": "设置"
+    "settings": "设置",
+    "api": "API 文档"
   },
   "common": {
     "submit": "提交",
@@ -37,7 +38,22 @@
     "landmarks": "关键点",
     "quality": "质量评分",
     "brightness": "亮度",
-    "sharpness": "清晰度"
+    "sharpness": "清晰度",
+    "configTitle": "检测配置",
+    "extraFeatures": "扩展功能",
+    "detThreshold": "检测阈值",
+    "age": "年龄检测",
+    "gender": "性别检测",
+    "pose": "3D 角度检测",
+    "qualityCheck": "图像质量检测",
+    "liveness": "RGB 活体检测",
+    "years": "岁",
+    "male": "男",
+    "female": "女",
+    "live": "活体",
+    "spoof": "非活体",
+    "thresholdHint": "阈值推荐：检测阈值 0.5，活体检测 0.5，人脸比对 0.80~0.82",
+    "livenessHint": "RGB 活体检测阈值 0.5，高于此阈值判断为活体（真人）"
   },
   "compare": {
     "title": "人脸比对",
@@ -86,10 +102,60 @@
     "apiConfig": "API 配置",
     "apiUrl": "API 地址",
     "apiKey": "API 密钥",
+    "apiKeyHint": "CompreFace 的 Detection、Recognition、Verification 是独立服务，需要分别配置各自的 API Key",
     "save": "保存设置"
   },
   "language": {
     "zh": "简体中文",
     "en": "English"
+  },
+  "api": {
+    "title": "FaceSDK API 文档",
+    "intro": "FaceSDK 基于 CompreFace 提供人脸识别服务，支持人脸检测、人脸比对、人脸搜索、人脸库管理和 RGB 活体检测功能。",
+    "headers": "请求头",
+    "params": "请求参数",
+    "paramName": "参数名",
+    "paramType": "类型",
+    "required": "必填",
+    "description": "说明",
+    "yes": "是",
+    "no": "否",
+    "example": "请求示例",
+    "response": "响应示例",
+    "yourApiKey": "你的API密钥",
+    "thresholdTitle": "阈值参考",
+    "detectionThreshold": "人脸检测阈值",
+    "livenessThreshold": "活体检测阈值",
+    "livenessHint2": "高于 0.5 为活体",
+    "compareThreshold1": "人脸比对阈值（生活照）",
+    "compareThreshold2": "人脸比对阈值（证件照）",
+    "compareHint1": "推荐 0.80",
+    "compareHint2": "推荐 0.82",
+    "detection": {
+      "desc": "人脸检测 - 检测图片中的人脸位置和特征",
+      "apiKey": "Detection 服务的 API Key",
+      "paramFile": "待检测的图片文件（JPG/PNG）",
+      "paramThreshold": "检测阈值，范围 0-1，默认 0.5，低于此值的人脸将被过滤",
+      "paramPlugins": "扩展功能插件，可选：age,gender,pose,landmarks,quality"
+    },
+    "verification": {
+      "desc": "人脸比对（1:1）- 比较两张人脸图片的相似度",
+      "apiKey": "Verification 服务的 API Key",
+      "paramSource": "源图片（第一张人脸图片）",
+      "paramTarget": "目标图片（第二张人脸图片）"
+    },
+    "recognition": {
+      "desc": "人脸搜索（1:N）- 在人脸库中搜索相似人脸",
+      "apiKey": "Recognition 服务的 API Key",
+      "paramFile": "待搜索的人脸图片",
+      "paramLimit": "返回结果数量限制，默认 5",
+      "paramThreshold": "相似度阈值，范围 0-1，默认 0.8，低于此值的结果将被过滤"
+    },
+    "antispoofing": {
+      "desc": "RGB 活体检测 - 判断图片中的人脸是否为真人",
+      "apiKey": "Anti-spoofing 服务的 API Key",
+      "paramFile": "待检测的图片文件",
+      "hint": "返回值范围 0-1，高于 0.5 判断为活体（真人），低于 0.5 判断为非活体（攻击）"
+    }
   }
 }

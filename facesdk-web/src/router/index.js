@@ -6,6 +6,7 @@ import CompareView from '@/views/CompareView.vue'
 import SearchView from '@/views/SearchView.vue'
 import SubjectsView from '@/views/SubjectsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
+import ApiView from '@/views/ApiView.vue'
 
 const routes = [
   {
@@ -41,6 +42,11 @@ const routes = [
         path: 'settings',
         name: 'settings',
         component: SettingsView
+      },
+      {
+        path: 'api',
+        name: 'api',
+        component: ApiView
       }
     ]
   }

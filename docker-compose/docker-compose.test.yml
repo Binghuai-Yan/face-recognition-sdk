@@ -1,5 +1,5 @@
 # FaceSDK 测试环境 Docker Compose 配置
-# CompreFace 自带 PostgreSQL，这里只启动 CompreFace 容器
+# CompreFace 自带 PostgreSQL，启用 Anti-spoofing 服务
 
 services:
   # CompreFace 完整服务（自带 PostgreSQL、Redis、API、Admin、Core）
@@ -9,6 +9,10 @@ services:
     restart: unless-stopped
     ports:
       - "8000:80"
+    environment:
+      # 启用 Anti-spoofing（RGB 活体检测）服务
+      - POSTGRES_ENABLED=true
+      - ENABLE_ANTISPOOFING=true
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/actuator/health"]
       interval: 30s

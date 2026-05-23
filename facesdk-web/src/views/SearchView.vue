@@ -58,7 +58,7 @@
                 <el-table-column :label="$t('search.similarity')">
                   <template #default="{ row }">
                     <el-progress 
-                      :percentage="(row.similarity * 100).toFixed(2)"
+                      :percentage="Number((row.similarity * 100).toFixed(2))"
                       :color="row.is_match ? '#67C23A' : '#E6A23C'"
                     />
                   </template>
@@ -112,11 +112,26 @@ const handleSearch = async () => {
     const formData = new FormData()
     formData.append('file', imageFile.value)
     formData.append('limit', form.limit)
-    formData.append('threshold', form.threshold)
+    formData.append('prediction_threshold', form.threshold)
     
     const res = await searchFace(formData)
-    results.value = res.results || []
-    ElMessage.success(`Found ${results.value.length} matches`)
+    // API 返回 { result: [{ box, subjects: [{ subject, similarity }] }] }
+    const resultArray = res.result || []
+    // 提取所有匹配的 subjects
+    const allMatches = []
+    resultArray.forEach(r => {
+      if (r.subjects && r.subjects.length > 0) {
+        r.subjects.forEach(s => {
+          allMatches.push({
+            subject: s.subject,
+            similarity: s.similarity,
+            is_match: s.similarity > form.threshold
+          })
+        })
+      }
+    })
+    results.value = allMatches
+    ElMessage.success(`Found ${allMatches.length} matches`)
   } catch (error) {
     ElMessage.error(error.message || 'Search failed')
   } finally {

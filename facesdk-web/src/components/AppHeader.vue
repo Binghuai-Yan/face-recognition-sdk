@@ -33,12 +33,16 @@
           <el-icon><UserFilled /></el-icon>
           <span>{{ $t('nav.subjects') }}</span>
         </el-menu-item>
+        <el-menu-item index="/api">
+          <el-icon><Document /></el-icon>
+          <span>{{ $t('nav.api') }}</span>
+        </el-menu-item>
       </el-menu>
     </div>
     <div class="actions">
       <el-dropdown @command="handleLanguageChange">
         <el-button type="primary" plain>
-          <el-icon><Globe /></el-icon>
+          <el-icon><Switch /></el-icon>
           {{ $t(`language.${currentLocale}`) }}
           <el-icon class="el-icon--right"><ArrowDown /></el-icon>
         </el-button>
@@ -67,9 +71,10 @@ import {
   CopyDocument,
   Search,
   UserFilled,
-  Globe,
+  Switch,
   Setting,
-  ArrowDown
+  ArrowDown,
+  Document
 } from '@element-plus/icons-vue'
 
 const { locale } = useI18n()

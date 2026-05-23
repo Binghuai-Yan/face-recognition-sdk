@@ -7,7 +7,7 @@
         </div>
       </template>
       
-      <el-form :model="form" label-position="top" style="max-width: 500px">
+      <el-form :model="form" label-position="top" style="max-width: 600px">
         <el-divider>{{ $t('settings.language') }}</el-divider>
         
         <el-form-item :label="$t('settings.language')">
@@ -19,16 +19,47 @@
         
         <el-divider>{{ $t('settings.apiConfig') }}</el-divider>
         
-        <el-form-item :label="$t('settings.apiUrl')">
-          <el-input v-model="form.apiUrl" placeholder="http://localhost:8000" />
-        </el-form-item>
+        <el-alert
+          :title="$t('settings.apiKeyHint')"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 20px"
+        />
         
-        <el-form-item :label="$t('settings.apiKey')">
+        <el-form-item label="Detection API Key">
           <el-input 
-            v-model="form.apiKey" 
+            v-model="form.detectionApiKey" 
             type="password" 
             show-password
-            placeholder="Enter your API key"
+            placeholder="Detection 服务 API Key"
+          />
+        </el-form-item>
+        
+        <el-form-item label="Recognition API Key">
+          <el-input 
+            v-model="form.recognitionApiKey" 
+            type="password" 
+            show-password
+            placeholder="Recognition 服务 API Key"
+          />
+        </el-form-item>
+        
+        <el-form-item label="Verification API Key">
+          <el-input 
+            v-model="form.verificationApiKey" 
+            type="password" 
+            show-password
+            placeholder="Verification 服务 API Key"
+          />
+        </el-form-item>
+        
+        <el-form-item label="Anti-spoofing API Key">
+          <el-input 
+            v-model="form.antispoofingApiKey" 
+            type="password" 
+            show-password
+            placeholder="Anti-spoofing（RGB 活体检测）服务 API Key"
           />
         </el-form-item>
         
@@ -51,8 +82,10 @@ const { locale } = useI18n()
 
 const form = reactive({
   language: localStorage.getItem('locale') || 'zh',
-  apiUrl: localStorage.getItem('apiUrl') || 'http://localhost:8000',
-  apiKey: localStorage.getItem('apiKey') || ''
+  detectionApiKey: localStorage.getItem('apiKey_detection') || '',
+  recognitionApiKey: localStorage.getItem('apiKey_recognition') || '',
+  verificationApiKey: localStorage.getItem('apiKey_verification') || '',
+  antispoofingApiKey: localStorage.getItem('apiKey_antispoofing') || ''
 })
 
 const handleLanguageChange = (lang) => {
@@ -63,15 +96,17 @@ const handleLanguageChange = (lang) => {
 
 const handleSave = () => {
   localStorage.setItem('locale', form.language)
-  localStorage.setItem('apiUrl', form.apiUrl)
-  localStorage.setItem('apiKey', form.apiKey)
+  localStorage.setItem('apiKey_detection', form.detectionApiKey)
+  localStorage.setItem('apiKey_recognition', form.recognitionApiKey)
+  localStorage.setItem('apiKey_verification', form.verificationApiKey)
+  localStorage.setItem('apiKey_antispoofing', form.antispoofingApiKey)
   ElMessage.success('Settings saved')
 }
 </script>
 
 <style scoped>
 .settings-view {
-  max-width: 600px;
+  max-width: 700px;
   margin: 0 auto;
 }
 

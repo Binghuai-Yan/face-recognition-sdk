@@ -5,7 +5,7 @@
       <router-view />
     </el-main>
     <el-footer class="app-footer">
-      <p>FaceSDK Web Management © 2024</p>
+      <p>FaceSDK Web Management © 2026</p>
     </el-footer>
   </el-container>
 </template>
