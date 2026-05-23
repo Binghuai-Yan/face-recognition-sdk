@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "home": "首页",
+    "detect": "人脸检测",
+    "compare": "人脸比对",
+    "search": "人脸搜索",
+    "subjects": "人脸库管理",
+    "settings": "设置"
+  },
+  "common": {
+    "submit": "提交",
+    "reset": "重置",
+    "cancel": "取消",
+    "confirm": "确认",
+    "delete": "删除",
+    "edit": "编辑",
+    "add": "添加",
+    "search": "搜索",
+    "upload": "上传图片",
+    "dragUpload": "将图片拖到此处，或点击上传",
+    "supportedFormats": "支持 JPG、PNG 格式",
+    "loading": "加载中...",
+    "success": "操作成功",
+    "error": "操作失败",
+    "noData": "暂无数据",
+    "actions": "操作"
+  },
+  "detect": {
+    "title": "人脸检测",
+    "description": "上传图片，检测其中的人脸位置和特征",
+    "uploadImage": "上传待检测图片",
+    "detectResult": "检测结果",
+    "faceCount": "检测到 {count} 张人脸",
+    "faceInfo": "人脸信息",
+    "confidence": "置信度",
+    "boundingBox": "位置坐标",
+    "landmarks": "关键点",
+    "quality": "质量评分",
+    "brightness": "亮度",
+    "sharpness": "清晰度"
+  },
+  "compare": {
+    "title": "人脸比对",
+    "description": "上传两张人脸图片，计算相似度",
+    "uploadFirst": "上传第一张图片",
+    "uploadSecond": "上传第二张图片",
+    "compareBtn": "开始比对",
+    "result": "比对结果",
+    "similarity": "相似度",
+    "distance": "距离",
+    "threshold": "阈值",
+    "match": "是否匹配",
+    "yes": "是",
+    "no": "否"
+  },
+  "search": {
+    "title": "人脸搜索",
+    "description": "上传人脸图片，在人脸库中搜索相似人脸",
+    "uploadImage": "上传搜索图片",
+    "searchBtn": "开始搜索",
+    "limit": "返回数量",
+    "threshold": "相似度阈值",
+    "results": "搜索结果",
+    "subjectId": "人脸库 ID",
+    "similarity": "相似度",
+    "noMatch": "未找到匹配的人脸"
+  },
+  "subjects": {
+    "title": "人脸库管理",
+    "description": "管理人脸库和其中的人脸记录",
+    "createSubject": "创建人脸库",
+    "subjectName": "人脸库名称",
+    "subjectId": "人脸库 ID",
+    "faceCount": "人脸数量",
+    "createdAt": "创建时间",
+    "addFace": "添加人脸",
+    "deleteSubject": "删除人脸库",
+    "deleteConfirm": "确定要删除该人脸库吗？此操作不可恢复！",
+    "faceList": "人脸列表",
+    "faceId": "人脸 ID",
+    "metadata": "元数据"
+  },
+  "settings": {
+    "title": "系统设置",
+    "language": "语言设置",
+    "apiConfig": "API 配置",
+    "apiUrl": "API 地址",
+    "apiKey": "API 密钥",
+    "save": "保存设置"
+  },
+  "language": {
+    "zh": "简体中文",
+    "en": "English"
+  }
+}

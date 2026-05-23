@@ -1,0 +1,95 @@
+{
+  "nav": {
+    "home": "Home",
+    "detect": "Face Detection",
+    "compare": "Face Compare",
+    "search": "Face Search",
+    "subjects": "Subjects",
+    "settings": "Settings"
+  },
+  "common": {
+    "submit": "Submit",
+    "reset": "Reset",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "upload": "Upload Image",
+    "dragUpload": "Drop image here, or click to upload",
+    "supportedFormats": "Support JPG, PNG format",
+    "loading": "Loading...",
+    "success": "Success",
+    "error": "Error",
+    "noData": "No Data",
+    "actions": "Actions"
+  },
+  "detect": {
+    "title": "Face Detection",
+    "description": "Upload an image to detect faces and their features",
+    "uploadImage": "Upload Image",
+    "detectResult": "Detection Result",
+    "faceCount": "Detected {count} face(s)",
+    "faceInfo": "Face Information",
+    "confidence": "Confidence",
+    "boundingBox": "Bounding Box",
+    "landmarks": "Landmarks",
+    "quality": "Quality Score",
+    "brightness": "Brightness",
+    "sharpness": "Sharpness"
+  },
+  "compare": {
+    "title": "Face Comparison",
+    "description": "Upload two face images to calculate similarity",
+    "uploadFirst": "Upload First Image",
+    "uploadSecond": "Upload Second Image",
+    "compareBtn": "Compare",
+    "result": "Comparison Result",
+    "similarity": "Similarity",
+    "distance": "Distance",
+    "threshold": "Threshold",
+    "match": "Match",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "search": {
+    "title": "Face Search",
+    "description": "Upload a face image to search for similar faces in the database",
+    "uploadImage": "Upload Search Image",
+    "searchBtn": "Search",
+    "limit": "Result Limit",
+    "threshold": "Similarity Threshold",
+    "results": "Search Results",
+    "subjectId": "Subject ID",
+    "similarity": "Similarity",
+    "noMatch": "No matching faces found"
+  },
+  "subjects": {
+    "title": "Subject Management",
+    "description": "Manage subjects and their face records",
+    "createSubject": "Create Subject",
+    "subjectName": "Subject Name",
+    "subjectId": "Subject ID",
+    "faceCount": "Face Count",
+    "createdAt": "Created At",
+    "addFace": "Add Face",
+    "deleteSubject": "Delete Subject",
+    "deleteConfirm": "Are you sure to delete this subject? This action cannot be undone!",
+    "faceList": "Face List",
+    "faceId": "Face ID",
+    "metadata": "Metadata"
+  },
+  "settings": {
+    "title": "System Settings",
+    "language": "Language",
+    "apiConfig": "API Configuration",
+    "apiUrl": "API URL",
+    "apiKey": "API Key",
+    "save": "Save Settings"
+  },
+  "language": {
+    "zh": "简体中文",
+    "en": "English"
+  }
+}
