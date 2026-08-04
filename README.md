@@ -145,7 +145,7 @@ MIT License
 
 ## 支持
 
-如有问题，请通过以下方式联系我们：
+如有问题，请通过以下方式联系我：
 
-- Email: team@facesdk.io
-- GitHub Issues: https://github.com/facesdk/facesdk/issues
+- Email: 787112776@qq.com
+- GitHub Issues: https://github.com/Binghuai-Yan/face-recognition-sdk/issues
