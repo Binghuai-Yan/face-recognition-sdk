@@ -14,6 +14,8 @@ resources:
   - configmap.yaml
   - postgres-deployment.yaml
   - compreface-deployment.yaml
+  - rustfs-deployment.yaml
+  - oss-gateway-deployment.yaml
   - ingress.yaml
 
 labels:
@@ -21,13 +23,17 @@ labels:
       app.kubernetes.io/name: facesdk
       app.kubernetes.io/version: "1.0.0"
       app.kubernetes.io/managed-by: kubectl
-    includeSelectors: true
+    includeSelectors: false
 
 images:
   - name: exadel/compreface
     newTag: "1.2.0"
   - name: postgres
     newTag: "15-alpine"
+  - name: rustfs/rustfs
+    newTag: "1.0.1"
+  - name: facesdk/oss-gateway
+    newTag: "1.0.0"
 
 replicas:
   - name: compreface-api

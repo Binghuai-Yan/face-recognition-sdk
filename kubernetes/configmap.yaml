@@ -6,6 +6,13 @@ metadata:
 data:
   POSTGRES_DB: compreface
   POSTGRES_USER: compreface
+  OSS_PROVIDER: s3
+  OSS_ENDPOINT: http://rustfs:9000
+  OSS_BUCKET: facesdk-images
+  OSS_REGION: us-east-1
+  OSS_ADDRESSING_STYLE: path
+  OSS_AUTO_CREATE_BUCKET: 'true'
+  OSS_PREFIX: faces
 ---
 apiVersion: v1
 kind: ConfigMap

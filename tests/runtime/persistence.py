@@ -58,6 +58,10 @@ def main():
                     params={'subject':marker['subject'],'size':100}, timeout=30)
                 response.raise_for_status()
                 assert any(face['image_id'] == marker['image_id'] for face in response.json()['faces'])
+                if env.get('FACESDK_OSS_LIVE')=='1':
+                    response=requests.get(url+'/api/v1/recognition/faces/'+marker['image_id']+'/img',
+                                          headers={'x-api-key':keys['recognition']},timeout=30)
+                    assert response.status_code==200 and response.content==image
         print('Real subject, stored face and recognition persistence: '+args.action+' passed')
 
 

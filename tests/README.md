@@ -7,7 +7,31 @@ python -m pip install -r tests/requirements.txt
 python tests/run_all.py
 ```
 
-入口会执行 Python 全量单测与 HTTP 协议测试、OpenAPI/部署配置验证、源码与 wheel 构建及全新虚拟环境安装；Java clean install（包含测试、源码、Javadoc 和打包）；若依示例编译与权限业务测试；Go test/vet；Node 测试/lint/TypeScript/包内容检查；Vue 组件测试/lint/生产构建；Compose 全 profiles 配置验证、Kubernetes kustomize 和 1.31.0 严格 JSON schema 校验（含可选 Redis、Secret）。Schema 下载保留 TLS 校验，缓存于 test-results，可通过单独脚本的 --version 参数调整 Kubernetes 目标版本。
+入口会执行 OSS 网关单测与 S3 请求契约验证、Python 全量单测与 HTTP 协议测试、OpenAPI/部署配置验证、源码与 wheel 构建及全新虚拟环境安装；Java clean install（包含测试、源码、Javadoc 和打包）；若依示例编译与权限业务测试；Go test/vet；Node 测试/lint/TypeScript/包内容检查；Vue 组件测试/lint/生产构建；三种 Compose 配置验证、Kubernetes kustomize 和 1.31.0 严格 JSON schema 校验。Schema 下载保留 TLS 校验，缓存于 test-results。
+
+## 真实 OSS 测试
+
+启动主 Compose 配置（默认 RustFS），使用测试专用 Recognition 服务和第二个独立 Recognition 服务。在上述 live 配置之外设置：
+
+```sh
+export FACESDK_OTHER_RECOGNITION_API_KEY='<第二个 Recognition key>'
+export FACESDK_OSS_ENDPOINT=http://localhost:9000
+export FACESDK_OSS_BUCKET=facesdk-images
+export FACESDK_OSS_ACCESS_KEY_ID='<测试存储 access ID>'
+export FACESDK_OSS_SECRET_ACCESS_KEY='<测试存储 secret>'
+python tests/run_all.py --live --oss-live --audit
+```
+
+`--oss-live` 缺少任何必需配置会失败。验证 multipart/base64 原图 SHA256、私有 bucket、授权读图和 static 兼容、跨服务访问/删除、批量与 Unicode Subject 删除、拒绝上传无残留。测试只清理自己创建的 Subject。该步骤需要 ListBucket 权限；未开启则不执行，不算通过。
+
+故障与持久化演练只在隔离实例中进行：停止 RustFS 后上传应 503 且没有注册记录；删除应返回 pending 并立即禁止读取；重建网关、恢复 RustFS 后对象应最终删除；保留数据卷重建 RustFS/网关后原图仍可授权读取。PostgreSQL 还需核对新 image_id 未保存图片 bytes。完整备份应包括数据库、bucket 和 journal，详见 [存储说明](../docs/object-storage.md)。
+
+```sh
+python tests/runtime/object_storage_faults.py --config test-results/runtime-live.json \
+  --env-file test-results/runtime.env --project facesdk-fulltest-20261011
+```
+
+此脚本仅允许 facesdk-fulltest-* 项目，自动恢复 RustFS 并清理自己的数据，使用主 Compose 配置；Docker 和 Compose CLI 可通过 --docker、--compose 指定。不要在生产项目中执行。
 
 任一必需工具缺失或命令失败，入口返回非零。日志、JUnit 和 summary.json 保存于 test-results（不提交）。工具路径可通过 FACESDK_MAVEN、FACESDK_GO、FACESDK_NPM、FACESDK_COMPOSE、FACESDK_KUBECTL 覆盖。受网络环境限制时可通过 FACESDK_MAVEN_SETTINGS 指定可信的 HTTPS Maven mirror，避免关闭 TLS 验证。
 

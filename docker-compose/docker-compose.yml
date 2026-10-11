@@ -15,9 +15,7 @@ services:
       MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5MB}
       UWSGI_PROCESSES: ${WORKERS:-2}
       UWSGI_THREADS: ${THREADS:-1}
-      SAVE_IMAGES_TO_DB: "true"
-    ports:
-      - "${COMPREFACE_BIND_ADDRESS:-127.0.0.1}:${COMPREFACE_PORT:-8000}:80"
+      SAVE_IMAGES_TO_DB: "false"
     networks: [facesdk-network]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/consistence/status | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get(\"status\") == \"OK\" else 1)'"]
@@ -55,7 +53,7 @@ services:
     profiles: [gateway]
     restart: unless-stopped
     depends_on:
-      compreface-api:
+      oss-gateway:
         condition: service_healthy
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -81,19 +79,59 @@ services:
       timeout: 5s
       retries: 3
 
-  # Optional application image store; CompreFace itself saves images in PostgreSQL.
-  minio:
-    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
-    profiles: [storage]
+  # Default S3-compatible object store. External providers are configured on oss-gateway.
+  rustfs:
+    image: rustfs/rustfs:1.0.1
     restart: unless-stopped
-    command: server /data --console-address :9001
+    entrypoint: ["sh", "-c", "test -n \"$$RUSTFS_ACCESS_KEY\" && test -n \"$$RUSTFS_SECRET_KEY\" && exec /entrypoint.sh \"$$@\"", "--"]
+    command: ["rustfs"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
-    volumes: [minio-data:/data]
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-facesdk}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-${OSS_SECRET_ACCESS_KEY:-}}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes: [rustfs-data:/data, rustfs-logs:/logs]
     ports:
-      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${RUSTFS_API_PORT:-9000}:9000"
+      - "127.0.0.1:${RUSTFS_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [facesdk-network]
+
+  oss-gateway:
+    image: facesdk/oss-gateway:1.0.0
+    build: ../services/oss-gateway
+    restart: unless-stopped
+    depends_on:
+      compreface-api:
+        condition: service_healthy
+    environment:
+      COMPREFACE_UPSTREAM: http://compreface-api:80
+      OSS_PROVIDER: s3
+      OSS_ENDPOINT: ${OSS_ENDPOINT:-http://rustfs:9000}
+      OSS_BUCKET: ${OSS_BUCKET:-facesdk-images}
+      OSS_REGION: ${OSS_REGION:-us-east-1}
+      OSS_ACCESS_KEY_ID: ${OSS_ACCESS_KEY_ID:-${RUSTFS_ACCESS_KEY:-facesdk}}
+      OSS_SECRET_ACCESS_KEY: ${OSS_SECRET_ACCESS_KEY:-${RUSTFS_SECRET_KEY:-}}
+      OSS_SESSION_TOKEN: ${OSS_SESSION_TOKEN:-}
+      OSS_ADDRESSING_STYLE: ${OSS_ADDRESSING_STYLE:-path}
+      OSS_AUTO_CREATE_BUCKET: ${OSS_AUTO_CREATE_BUCKET:-true}
+      OSS_PREFIX: ${OSS_PREFIX:-faces}
+      OSS_CA_BUNDLE: ${OSS_CA_BUNDLE:-}
+      OSS_MAX_BODY_BYTES: ${OSS_MAX_BODY_BYTES:-10485760}
+      OSS_JOURNAL_PATH: /data/storage.sqlite3
+    volumes: [oss-journal:/data]
+    ports:
+      - "${COMPREFACE_BIND_ADDRESS:-127.0.0.1}:${COMPREFACE_PORT:-8000}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v1/consistence/status', timeout=10)"]
+      interval: 15s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
     networks: [facesdk-network]
 
   prometheus:
@@ -156,7 +194,9 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  minio-data:
+  rustfs-data:
+  rustfs-logs:
+  oss-journal:
   prometheus-data:
   alertmanager-data:
   grafana-data:

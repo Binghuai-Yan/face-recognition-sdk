@@ -51,7 +51,7 @@ def main():
     application = response.json()['id']
     env = {'FACESDK_LIVE':'1','FACESDK_API_URL':url,'FACESDK_WEB_URL':args.web_url,
            'FACESDK_TEST_IMAGE':str(Path(args.image).resolve())}
-    for service, kind in [('detection','DETECTION'),('recognition','RECOGNITION'),('verification','VERIFY')]:
+    for service, kind in [('detection','DETECTION'),('recognition','RECOGNITION'),('verification','VERIFY'),('other_recognition','RECOGNITION')]:
         response = session.post(url+'/admin/app/'+application+'/model',
                                 json={'name':service,'type':kind}, timeout=30)
         response.raise_for_status()

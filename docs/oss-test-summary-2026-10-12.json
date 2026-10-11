@@ -1,0 +1,357 @@
+{
+  "date": "2026-10-12",
+  "generated_at_utc": "2026-10-11T16:56:59.479975+00:00",
+  "scope": "Default RustFS and configurable S3-compatible object storage gateway",
+  "full_runner": {
+    "checks": [
+      {
+        "check": "python-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.59
+      },
+      {
+        "check": "oss-gateway-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.0
+      },
+      {
+        "check": "oss-gateway-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.2
+      },
+      {
+        "check": "python-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.3
+      },
+      {
+        "check": "python-package",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 3.33
+      },
+      {
+        "check": "fresh-venv",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 3.84
+      },
+      {
+        "check": "fresh-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 19.2
+      },
+      {
+        "check": "fresh-import",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.16
+      },
+      {
+        "check": "fresh-dependencies",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.77
+      },
+      {
+        "check": "java-verify-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 8.03
+      },
+      {
+        "check": "ruoyi-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 7.64
+      },
+      {
+        "check": "go-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.88
+      },
+      {
+        "check": "go-vet",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.38
+      },
+      {
+        "check": "node-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.59
+      },
+      {
+        "check": "node-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.45
+      },
+      {
+        "check": "node-lint",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.72
+      },
+      {
+        "check": "node-types",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.47
+      },
+      {
+        "check": "node-package",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.8
+      },
+      {
+        "check": "node-production-audit",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.77
+      },
+      {
+        "check": "web-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 29.58
+      },
+      {
+        "check": "web-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.91
+      },
+      {
+        "check": "web-lint",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.94
+      },
+      {
+        "check": "web-build",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 11.86
+      },
+      {
+        "check": "web-production-audit",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.78
+      },
+      {
+        "check": "compose-config",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.11
+      },
+      {
+        "check": "compose-test-config",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.08
+      },
+      {
+        "check": "compose-external-oss-config",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.09
+      },
+      {
+        "check": "kustomize",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.11
+      },
+      {
+        "check": "kubernetes-schema",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.67
+      },
+      {
+        "check": "live-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 24.47
+      },
+      {
+        "check": "node-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.47
+      },
+      {
+        "check": "go-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.8
+      },
+      {
+        "check": "java-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.53
+      },
+      {
+        "check": "oss-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 81.59
+      }
+    ],
+    "live_requested": true,
+    "oss_live_requested": true,
+    "race_requested": false,
+    "production_audit_requested": true
+  },
+  "case_counts": {
+    "python_sdk_and_configuration": {
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "oss_gateway": {
+      "tests": 26,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "python_real_model": {
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "docker_real_oss": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "kubernetes_real_oss": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "external_endpoint_real_oss": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "java_sdk": {
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "ruoyi": {
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "node_sdk": {
+      "tests": 11,
+      "failures": 0
+    },
+    "vue_including_real_xhr": {
+      "tests": 8,
+      "failures": 0
+    },
+    "go_top_level": {
+      "tests": 5,
+      "failures": 0
+    }
+  },
+  "kubernetes_model_matrix": [
+    {
+      "check": "python",
+      "exit_code": 0,
+      "status": "passed",
+      "seconds": 6.78
+    },
+    {
+      "check": "node",
+      "exit_code": 0,
+      "status": "passed",
+      "seconds": 1.55
+    },
+    {
+      "check": "go",
+      "exit_code": 0,
+      "status": "passed",
+      "seconds": 1.69
+    },
+    {
+      "check": "java",
+      "exit_code": 0,
+      "status": "passed",
+      "seconds": 2.25
+    }
+  ],
+  "object_storage_faults_and_restore": {
+    "new-original-not-stored-in-postgresql": "passed",
+    "sqlite-backup-restores-original-image-association": "passed",
+    "rustfs-and-journal-survive-container-recreation": "passed",
+    "storage-outage-revokes-readiness-with-live-process": "passed",
+    "storage-outage-upload-does-not-register-a-face": "passed",
+    "storage-outage-delete-revokes-access-and-queues-object": "passed",
+    "delete-outbox-survives-gateway-recreation-and-drains": "passed"
+  },
+  "kubernetes_ingress": {
+    "trusted_tls_sni_api_hostname": "passed",
+    "trusted_tls_sni_ui_hostname": "passed",
+    "real_detection_through_ingress": "passed",
+    "http_to_https_redirect": "passed"
+  },
+  "kubernetes_pvc_recreation": {
+    "status": "passed",
+    "original_bytes_read_after_gateway_and_rustfs_pod_recreation": true,
+    "recognition_and_same_image_id": true
+  },
+  "wsl": {
+    "distribution": "Ubuntu-24.04",
+    "go_race": "passed",
+    "go_vet": "passed"
+  },
+  "kubernetes_strict_schema_resources": 20,
+  "runtime_services": {
+    "real-api-core-database-health": "passed",
+    "gateway-tls-verified-certificate": "passed",
+    "gateway-http-redirect": "passed",
+    "gateway-real-rate-limit": "passed",
+    "prometheus-real-database-and-api-probes": "passed",
+    "grafana-datasource-and-dashboard": "passed",
+    "alertmanager-real-readiness": "passed",
+    "redis-rejects-anonymous-and-accepts-authenticated": "passed"
+  },
+  "tested_images": [
+    "exadel/compreface:1.2.0",
+    "rustfs/rustfs:1.0.1",
+    "facesdk/oss-gateway:1.0.0 (built from source)"
+  ],
+  "external_configuration_test": {
+    "backend": "RustFS reached through host.docker.internal:19000",
+    "separate_bucket_and_prefix": true,
+    "local_rustfs_service_disabled": true
+  },
+  "limitations": [
+    "S3-compatible protocol only; native Aliyun OSS/COS protocols and cloud provider accounts not tested",
+    "Single gateway worker/replica and SQLite journal; no distributed high availability",
+    "Ambiguous upload recovery, service-key rotation and admin-level orphan cleanup require reconciliation",
+    "Small functional test workloads; no production capacity or biometric accuracy claim"
+  ]
+}

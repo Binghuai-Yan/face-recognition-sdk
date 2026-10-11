@@ -45,7 +45,7 @@ spec:
         - name: UWSGI_THREADS
           value: '1'
         - name: SAVE_IMAGES_TO_DB
-          value: 'true'
+          value: 'false'
         resources:
           requests:
             memory: 4Gi

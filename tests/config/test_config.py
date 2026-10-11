@@ -42,7 +42,7 @@ def test_openapi_and_official_fixtures():
 def test_compose_services_mounts_and_credentials():
     spec = load('docker-compose/docker-compose.yml')
     services = spec['services']
-    assert {name for name, service in services.items() if not service.get('profiles')} == {'compreface-api','postgres'}
+    assert {name for name, service in services.items() if not service.get('profiles')} == {'compreface-api','postgres','rustfs','oss-gateway'}
     api, pg = services['compreface-api'], services['postgres']
     assert api['environment']['EXTERNAL_DB'] == 'true'
     assert api['environment']['POSTGRES_URL'].startswith('jdbc:postgresql://postgres:5432/')
@@ -50,6 +50,14 @@ def test_compose_services_mounts_and_credentials():
         assert api['environment'][key] == pg['environment'][key]
     assert any(v.startswith('postgres-data:/var/lib/postgresql/data') for v in pg['volumes'])
     assert not services['redis'].get('ports')
+    assert api['environment']['SAVE_IMAGES_TO_DB']=='false' and not api.get('ports')
+    gateway=services['oss-gateway']
+    assert gateway['environment']['OSS_ENDPOINT'].endswith('http://rustfs:9000}')
+    assert 'oss-journal:/data' in gateway['volumes']
+    assert 'RUSTFS_SECRET_KEY' in gateway['environment']['OSS_SECRET_ACCESS_KEY']
+    assert all(port.startswith('127.0.0.1:') for port in services['rustfs']['ports'])
+    assert 'test -n' in ' '.join(services['rustfs']['entrypoint'])
+    assert load('docker-compose/docker-compose.external-oss.yml')['services']['rustfs']['profiles']==['local-storage']
     assert '--requirepass' in ' '.join(services['redis']['command'])
     assert 'consistence/status' in ' '.join(api['healthcheck']['test']) and '"OK"' in ' '.join(api['healthcheck']['test'])
     for service in services.values():
@@ -72,13 +80,15 @@ def test_kubernetes_services_and_storage():
     deployments = [d for d in docs if d['kind']=='Deployment']
     pvcs = {d['metadata']['name'] for d in docs if d['kind']=='PersistentVolumeClaim'}
     configmaps = {d['metadata']['name'] for d in docs if d['kind']=='ConfigMap'}
-    assert {'compreface-api','compreface-ui','postgres'} <= services.keys()
+    assert {'compreface-api','compreface-ui','postgres','oss-gateway','rustfs'} <= services.keys()
+    assert {'oss-journal','rustfs-data'} <= pvcs
     assert all(d['spec']['type']=='ClusterIP' for d in services.values())
     for ingress in [d for d in docs if d['kind']=='Ingress']:
         assert ingress['spec']['tls']
         for rule in ingress['spec']['rules']:
             for path in rule['http']['paths']:
                 assert path['backend']['service']['name'] in services
+                assert path['backend']['service']['name']=='oss-gateway'
     for deployment in deployments:
         pod=deployment['spec']['template']['spec']
         for volume in pod.get('volumes', []):
@@ -98,8 +108,14 @@ def test_kubernetes_services_and_storage():
     assert env['EXTERNAL_DB']['value']=='true'
     assert env['POSTGRES_URL']['value'].startswith('jdbc:postgresql://')
     assert 'POSTGRES_USER' in env and 'POSTGRES_PASSWORD' in env
+    assert env['SAVE_IMAGES_TO_DB']['value']=='false'
     assert '"OK"' in ' '.join(container['readinessProbe']['exec']['command'])
     assert container['startupProbe']['failureThreshold']*container['startupProbe']['periodSeconds']>=300
+    gateway=next(d for d in deployments if d['metadata']['name']=='oss-gateway')
+    assert gateway['spec']['replicas']==1 and gateway['spec']['strategy']['type']=='Recreate'
+    container=gateway['spec']['template']['spec']['containers'][0]
+    assert container['livenessProbe']['httpGet']['path']=='/health/live'
+    assert container['readinessProbe']['httpGet']['path']=='/api/v1/consistence/status'
 
 
 def test_monitoring_targets_and_health_semantics():

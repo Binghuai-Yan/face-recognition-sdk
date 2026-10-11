@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--live', action='store_true', help='Require and run the real CompreFace tests')
     parser.add_argument('--race', action='store_true', help='Require Go race tests (needs a C compiler)')
     parser.add_argument('--audit', action='store_true', help='Audit production npm dependencies against the official registry')
+    parser.add_argument('--oss-live', action='store_true', help='Require real S3-compatible storage lifecycle tests')
     parser.add_argument('--live-config', help='Ignored JSON file containing an env mapping for real-service tests')
     args = parser.parse_args()
     if args.live_config:
@@ -38,7 +39,7 @@ def main():
         except OSError as error:
             status, log = 127, str(error)
         for key, value in os.environ.items():
-            if key.startswith('FACESDK_') and any(word in key for word in ['API_KEY','PASSWORD','TOKEN']) and value:
+            if key.startswith(('FACESDK_','OSS_','RUSTFS_')) and any(word in key for word in ['API_KEY','PASSWORD','TOKEN','SECRET','ACCESS_KEY']) and value:
                 log = log.replace(value, '[REDACTED]')
         (output/(name+'.log')).write_text(log, encoding='utf-8')
         state = 'skipped' if status == 0 and skip_reason else ('passed' if status == 0 else 'failed')
@@ -58,6 +59,8 @@ def main():
     if os.getenv('FACESDK_MAVEN_SETTINGS'):
         java_args += ['-s',os.environ['FACESDK_MAVEN_SETTINGS']]
     run('python-install',[sys.executable,'-m','pip','install','./sdk/python'])
+    run('oss-gateway-install',[sys.executable,'-m','pip','install','-r','services/oss-gateway/requirements.txt'])
+    run('oss-gateway-tests',[sys.executable,'-m','pytest','services/oss-gateway/tests','-q','--junitxml=test-results/oss-gateway.xml'])
     run('python-tests',[sys.executable,'-m','pytest','sdk/python/tests','tests/config','-q','--junitxml=test-results/python.xml'])
     run('python-package',[sys.executable,'-m','build','--no-isolation'],ROOT/'sdk/python')
     wheels=list((ROOT/'sdk/python/dist').glob('*.whl'))
@@ -92,6 +95,7 @@ def main():
     compose_cmd=[compose] if compose else [tool('docker','FACESDK_DOCKER'),'compose']
     run('compose-config',compose_cmd+['--env-file','.env.example','--profile','*','config','--quiet'],ROOT/'docker-compose')
     run('compose-test-config',compose_cmd+['-f','docker-compose.test.yml','config','--quiet'],ROOT/'docker-compose')
+    run('compose-external-oss-config',compose_cmd+['--env-file','.env.example','-f','docker-compose.yml','-f','docker-compose.external-oss.yml','config','--quiet'],ROOT/'docker-compose')
     kubectl=tool('kubectl','FACESDK_KUBECTL')
     run('kustomize',[kubectl,'kustomize','kubernetes'])
     run('kubernetes-schema',[sys.executable,'tests/validate_kubernetes.py','--kubectl',kubectl])
@@ -106,7 +110,10 @@ def main():
         run('go-live',[go,'run','.'],ROOT/'tests/integration/live/go',env=live_env)
         java = str(Path(os.environ['JAVA_HOME'])/'bin'/('java.exe' if os.name=='nt' else 'java')) if os.getenv('JAVA_HOME') else tool('java','FACESDK_JAVA')
         run('java-live',[java,'--class-path',str(ROOT/'sdk/java/target/facesdk-java-1.0.0.jar'),str(ROOT/'tests/integration/live/LiveSmoke.java')],env=live_env)
-    report={'checks':results,'live_requested':live_requested,'race_requested':args.race,'production_audit_requested':args.audit}
+    if args.oss_live:
+        live_env['FACESDK_OSS_LIVE']='1'
+        run('oss-live',[sys.executable,'-m','pytest','tests/runtime/test_object_storage.py','-q','--junitxml=test-results/oss-live.xml'],env=live_env)
+    report={'checks':results,'live_requested':live_requested,'oss_live_requested':args.oss_live,'race_requested':args.race,'production_audit_requested':args.audit}
     (output/'summary.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
     print(f'Results: {output}',flush=True)
     return 1 if any(r['exit_code'] for r in results) else 0

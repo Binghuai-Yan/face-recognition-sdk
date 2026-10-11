@@ -15,7 +15,7 @@ scrape_configs:
     params:
       module: [compreface_health]
     static_configs:
-      - targets: ['http://compreface-api:8080/api/v1/consistence/status']
+      - targets: ['http://oss-gateway:8080/api/v1/consistence/status']
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

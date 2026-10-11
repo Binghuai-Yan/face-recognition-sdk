@@ -1,0 +1,4 @@
+# Use with docker-compose.yml when an external S3-compatible provider is configured.
+services:
+  rustfs:
+    profiles: [local-storage]

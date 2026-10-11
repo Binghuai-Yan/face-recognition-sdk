@@ -38,7 +38,7 @@ def main():
                                  stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
         log = process.stdout
         for key, value in env.items():
-            if key.startswith('FACESDK_') and any(word in key for word in ['API_KEY','PASSWORD','TOKEN']) and value:
+            if key.startswith(('FACESDK_','OSS_','RUSTFS_')) and any(word in key for word in ['API_KEY','PASSWORD','TOKEN','SECRET','ACCESS_KEY']) and value:
                 log = log.replace(value, '[REDACTED]')
         (output/(args.name+'-'+name+'.log')).write_text(log, encoding='utf-8')
         results.append({'check':name,'exit_code':process.returncode,

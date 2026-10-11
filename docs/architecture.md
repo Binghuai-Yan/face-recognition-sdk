@@ -3,9 +3,12 @@
 ```mermaid
 flowchart LR
   Clients[Python / Java / Go / Node / Vue] --> Gateway[TLS Nginx 或 Ingress]
-  Gateway --> Bundle[CompreFace Nginx / UI / API / admin / Core]
-  Bundle --> PG[(PostgreSQL: Subjects / embeddings / images)]
-  Probe[Blackbox exporter] --> Bundle
+  Gateway --> OSS[OSS 存储网关]
+  OSS --> Bundle[CompreFace Nginx / UI / API / admin / Core]
+  OSS --> Objects[(RustFS 或通用 S3 OSS: 原图)]
+  OSS --> Journal[(SQLite: 图片关联 / 上传意图 / 删除队列)]
+  Bundle --> PG[(PostgreSQL: Subjects / embeddings)]
+  Probe[Blackbox exporter] --> OSS
   PGExporter[PostgreSQL exporter] --> PG
   Probe --> Prometheus
   PGExporter --> Prometheus
@@ -17,7 +20,7 @@ flowchart LR
 
 服务密钥按 Detection、Recognition、Verification 分类；业务用户所有权由应用层实现。SDK 按服务选择密钥并归一化后端响应。特征提取结果的 Base64 是跨语言二进制编码，不构成加密。
 
-模型由 CompreFace Core 执行，模型和插件能力以实际镜像为准。Redis/MinIO 是可选应用基础设施，不参与当前 CompreFace 请求链。没有独立活体检测服务或 quality 插件实现。
+模型由 CompreFace Core 执行，模型和插件能力以实际镜像为准。主部署设置 SAVE_IMAGES_TO_DB=false，由网关在注册前保存原图，并使用持久化 journal 协调异常恢复。图片读取检查服务权限与后端当前 image_id，删除后立即撤销读取，OSS 故障时保留待删除队列。Redis 是可选应用基础设施。没有独立活体检测服务或 quality 插件实现。详见 [对象存储](object-storage.md)。
 
 依赖可用性通过 API consistence JSON 监控，数据库由 PG exporter 监控。没有虚构的 HTTP 业务指标、宿主 CPU 指标或未部署的导出器。Alertmanager 未默认配置外部通知。
 

@@ -16,6 +16,8 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
     nginx.ingress.kubernetes.io/limit-rps: "20"
+    # CompreFace's legacy static URL embeds an API key.
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
@@ -32,9 +34,9 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: compreface-api
+                name: oss-gateway
                 port:
-                  number: 80
+                  number: 8080
     - host: facesdk-ui.yourdomain.com
       http:
         paths:
@@ -42,6 +44,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: compreface-ui
+                name: oss-gateway
                 port:
-                  number: 80
+                  number: 8080

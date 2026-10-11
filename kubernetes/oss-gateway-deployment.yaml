@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: oss-journal
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oss-gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: oss-gateway
+  template:
+    metadata:
+      labels:
+        app: oss-gateway
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        runAsNonRoot: true
+      containers:
+        - name: oss-gateway
+          image: facesdk/oss-gateway:1.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef: {name: facesdk-config}
+          env:
+            - name: COMPREFACE_UPSTREAM
+              value: http://compreface-api:80
+            - name: OSS_JOURNAL_PATH
+              value: /data/storage.sqlite3
+            - name: OSS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef: {name: facesdk-secrets, key: OSS_ACCESS_KEY_ID}
+            - name: OSS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef: {name: facesdk-secrets, key: OSS_SECRET_ACCESS_KEY}
+            - name: OSS_SESSION_TOKEN
+              valueFrom:
+                secretKeyRef: {name: facesdk-secrets, key: OSS_SESSION_TOKEN, optional: true}
+          volumeMounts:
+            - name: journal
+              mountPath: /data
+          readinessProbe:
+            httpGet: {path: /api/v1/consistence/status, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 15
+          livenessProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 20
+            timeoutSeconds: 5
+          startupProbe:
+            httpGet: {path: /health/live, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: '2', memory: 512Mi}
+      volumes:
+        - name: journal
+          persistentVolumeClaim: {claimName: oss-journal}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oss-gateway
+spec:
+  type: ClusterIP
+  selector: {app: oss-gateway}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

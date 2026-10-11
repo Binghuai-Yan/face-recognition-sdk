@@ -53,5 +53,6 @@ logs/
 htmlcov/
 test-results/
 results/
+services/oss-gateway/data/
 docker-compose/nginx/ssl/*.pem
 docker-compose/nginx/ssl/*.key
