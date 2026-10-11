@@ -9,25 +9,47 @@ package facesdk
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
 // Client FaceSDK 客户端
 type Client struct {
-	apiURL     string
-	apiKey     string
-	httpClient *http.Client
-	maxRetries int
-	retryDelay time.Duration
+	apiURL              string
+	apiKey              string
+	httpClient          *http.Client
+	maxRetries          int
+	retryDelay          time.Duration
+	apiKeys             map[string]string
+	comparisonThreshold float64
+}
+
+// WithAPIKeys selects the key for each CompreFace service (detection, recognition, verification).
+func WithAPIKeys(keys map[string]string) ClientOption {
+	return func(c *Client) {
+		c.apiKeys = make(map[string]string, len(keys))
+		for service, key := range keys {
+			c.apiKeys[service] = key
+		}
+	}
+}
+
+// WithComparisonThreshold sets the client-side 1:1 similarity threshold.
+func WithComparisonThreshold(threshold float64) ClientOption {
+	return func(c *Client) { c.comparisonThreshold = threshold }
 }
 
 // ClientOption 客户端配置选项
@@ -57,11 +79,12 @@ func WithRetryDelay(retryDelay time.Duration) ClientOption {
 // NewClient 创建新的 FaceSDK 客户端
 func NewClient(apiURL, apiKey string, opts ...ClientOption) *Client {
 	client := &Client{
-		apiURL:     apiURL,
-		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		maxRetries: 3,
-		retryDelay: 500 * time.Millisecond,
+		apiURL:              strings.TrimRight(apiURL, "/"),
+		apiKey:              apiKey,
+		httpClient:          &http.Client{Timeout: 30 * time.Second},
+		maxRetries:          3,
+		retryDelay:          500 * time.Millisecond,
+		comparisonThreshold: 0.8,
 	}
 
 	for _, opt := range opts {
@@ -73,16 +96,44 @@ func NewClient(apiURL, apiKey string, opts ...ClientOption) *Client {
 
 // request 发送 HTTP 请求
 func (c *Client) request(ctx context.Context, method, endpoint string, body io.Reader, contentType string) ([]byte, error) {
-	url := c.apiURL + endpoint
+	requestURL := c.apiURL + endpoint
+	if c.maxRetries < 0 || c.retryDelay < 0 {
+		return nil, fmt.Errorf("invalid retry configuration")
+	}
+	var payload []byte
+	var err error
+	if body != nil {
+		payload, err = io.ReadAll(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to buffer request: %w", err)
+		}
+	}
+	parts := strings.Split(strings.SplitN(endpoint, "?", 2)[0], "/")
+	key := c.apiKey
+	if serviceKey, ok := c.apiKeys[parts[3]]; ok {
+		key = serviceKey
+	}
+	if key == "" {
+		return nil, fmt.Errorf("missing API key for %s", parts[3])
+	}
+	safe := method == http.MethodGet || method == http.MethodDelete ||
+		parts[len(parts)-1] == "detect" || parts[len(parts)-1] == "verify" || parts[len(parts)-1] == "recognize"
+	retries := 0
+	if safe {
+		retries = c.maxRetries
+	}
 
 	var lastErr error
-	for attempt := 0; attempt <= c.maxRetries; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, method, url, body)
+	for attempt := 0; attempt <= retries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(payload))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
 
-		req.Header.Set("x-api-key", c.apiKey)
+		req.Header.Set("x-api-key", key)
 		if contentType != "" {
 			req.Header.Set("Content-Type", contentType)
 		}
@@ -90,27 +141,46 @@ func (c *Client) request(ctx context.Context, method, endpoint string, body io.R
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = err
-			if attempt < c.maxRetries {
-				time.Sleep(c.retryDelay * time.Duration(attempt+1))
+			if attempt < retries {
+				if err := c.waitRetry(ctx, attempt); err != nil {
+					return nil, err
+				}
 				continue
 			}
-			return nil, fmt.Errorf("request failed after %d attempts: %w", c.maxRetries+1, lastErr)
+			return nil, fmt.Errorf("request failed after %d attempts: %w", retries+1, lastErr)
 		}
-		defer resp.Body.Close()
 
 		respBody, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read response body: %w", err)
 		}
 
-		if resp.StatusCode != http.StatusOK {
+		if attempt < retries && (resp.StatusCode == 429 || resp.StatusCode == 500 || resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504) {
+			if err := c.waitRetry(ctx, attempt); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, c.handleErrorResponse(resp.StatusCode, respBody)
 		}
 
 		return respBody, nil
 	}
 
-	return nil, fmt.Errorf("request failed after %d attempts: %w", c.maxRetries+1, lastErr)
+	return nil, fmt.Errorf("request failed after %d attempts: %w", retries+1, lastErr)
+}
+
+func (c *Client) waitRetry(ctx context.Context, attempt int) error {
+	timer := time.NewTimer(c.retryDelay * time.Duration(1<<uint(attempt)))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // handleErrorResponse 处理错误响应
@@ -165,15 +235,19 @@ func (c *Client) DetectFromReader(ctx context.Context, reader io.Reader, filenam
 		return nil, fmt.Errorf("failed to copy image data: %w", err)
 	}
 
-	for key, value := range options {
-		writer.WriteField(key, value)
-	}
-
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close writer: %w", err)
 	}
 
-	body, err := c.request(ctx, http.MethodPost, "/api/v1/detection/detect", &buf, writer.FormDataContentType())
+	params := url.Values{}
+	for key, value := range options {
+		params.Set(key, value)
+	}
+	endpoint := "/api/v1/detection/detect"
+	if len(params) > 0 {
+		endpoint += "?" + params.Encode()
+	}
+	body, err := c.request(ctx, http.MethodPost, endpoint, &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +287,7 @@ func (c *Client) CompareFromReaders(ctx context.Context, reader1 io.Reader, file
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
-	part1, err := writer.CreateFormFile("file1", filename1)
+	part1, err := writer.CreateFormFile("source_image", filename1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file1: %w", err)
 	}
@@ -221,7 +295,7 @@ func (c *Client) CompareFromReaders(ctx context.Context, reader1 io.Reader, file
 		return nil, fmt.Errorf("failed to copy image1 data: %w", err)
 	}
 
-	part2, err := writer.CreateFormFile("file2", filename2)
+	part2, err := writer.CreateFormFile("target_image", filename2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create form file2: %w", err)
 	}
@@ -233,17 +307,33 @@ func (c *Client) CompareFromReaders(ctx context.Context, reader1 io.Reader, file
 		return nil, fmt.Errorf("failed to close writer: %w", err)
 	}
 
-	body, err := c.request(ctx, http.MethodPost, "/api/v1/recognition/compare", &buf, writer.FormDataContentType())
+	body, err := c.request(ctx, http.MethodPost, "/api/v1/verification/verify", &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, err
 	}
 
-	var result CompareResult
-	if err := json.Unmarshal(body, &result); err != nil {
+	var raw struct {
+		Result []struct {
+			Source  Face `json:"source_image_face"`
+			Matches []struct {
+				Face
+				Similarity float64 `json:"similarity"`
+			} `json:"face_matches"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-
-	return &result, nil
+	if len(raw.Result) != 1 || len(raw.Result[0].Matches) != 1 {
+		return nil, fmt.Errorf("comparison requires exactly one face in each image")
+	}
+	if math.IsNaN(c.comparisonThreshold) || c.comparisonThreshold < 0 || c.comparisonThreshold > 1 {
+		return nil, fmt.Errorf("invalid comparison threshold")
+	}
+	target := raw.Result[0].Matches[0]
+	target.Face = normalizeFace(target.Face)
+	raw.Result[0].Source = normalizeFace(raw.Result[0].Source)
+	return &CompareResult{Similarity: target.Similarity, Threshold: c.comparisonThreshold, Match: target.Similarity >= c.comparisonThreshold, Face1: &raw.Result[0].Source, Face2: &target.Face}, nil
 }
 
 // Search 人脸识别（1:N）
@@ -264,6 +354,9 @@ func (c *Client) SearchFromBytes(ctx context.Context, imageData []byte, limit in
 
 // SearchFromReader 从 Reader 搜索人脸
 func (c *Client) SearchFromReader(ctx context.Context, reader io.Reader, filename string, limit int, threshold float64) (*SearchResult, error) {
+	if limit < 1 || math.IsNaN(threshold) || threshold < 0 || threshold > 1 {
+		return nil, fmt.Errorf("invalid search limit or threshold")
+	}
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
@@ -276,16 +369,11 @@ func (c *Client) SearchFromReader(ctx context.Context, reader io.Reader, filenam
 		return nil, fmt.Errorf("failed to copy image data: %w", err)
 	}
 
-	writer.WriteField("limit", strconv.Itoa(limit))
-	if threshold > 0 {
-		writer.WriteField("threshold", strconv.FormatFloat(threshold, 'f', -1, 64))
-	}
-
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close writer: %w", err)
 	}
 
-	body, err := c.request(ctx, http.MethodPost, "/api/v1/recognition/recognize", &buf, writer.FormDataContentType())
+	body, err := c.request(ctx, http.MethodPost, "/api/v1/recognition/recognize?prediction_count="+strconv.Itoa(limit), &buf, writer.FormDataContentType())
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +382,15 @@ func (c *Client) SearchFromReader(ctx context.Context, reader io.Reader, filenam
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
+	filtered := make([]MatchResult, 0, len(result.Results))
+	for _, match := range result.Results {
+		if match.Similarity >= threshold {
+			match.Match = true
+			filtered = append(filtered, match)
+		}
+	}
+	sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].Similarity > filtered[j].Similarity })
+	result.Results = filtered
 
 	return &result, nil
 }
@@ -332,26 +429,34 @@ func (c *Client) ExtractFeatureFromReader(ctx context.Context, reader io.Reader,
 		return "", fmt.Errorf("failed to close writer: %w", err)
 	}
 
-	body, err := c.request(ctx, http.MethodPost, "/api/v1/recognition/face", &buf, writer.FormDataContentType())
+	body, err := c.request(ctx, http.MethodPost, "/api/v1/detection/detect?face_plugins=calculator", &buf, writer.FormDataContentType())
 	if err != nil {
 		return "", err
 	}
 
-	var result struct {
-		Embedding string `json:"embedding"`
-	}
+	var result DetectionResult
 	if err := json.Unmarshal(body, &result); err != nil {
 		return "", fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return result.Embedding, nil
+	if len(result.Faces) != 1 {
+		return "", fmt.Errorf("feature extraction requires exactly one face")
+	}
+	embedding := result.Faces[0].Embedding
+	if len(embedding) == 0 {
+		return "", fmt.Errorf("calculator plugin did not return an embedding")
+	}
+	encoded := make([]byte, len(embedding)*4)
+	for i, value := range embedding {
+		binary.LittleEndian.PutUint32(encoded[i*4:], math.Float32bits(value))
+	}
+	return base64.StdEncoding.EncodeToString(encoded), nil
 }
 
 // CreateSubject 创建人脸库
 func (c *Client) CreateSubject(ctx context.Context, subjectID, name string) (*Subject, error) {
 	payload := map[string]string{
 		"subject": subjectID,
-		"name":    name,
 	}
 
 	jsonData, err := json.Marshal(payload)
@@ -374,7 +479,10 @@ func (c *Client) CreateSubject(ctx context.Context, subjectID, name string) (*Su
 
 // DeleteSubject 删除人脸库
 func (c *Client) DeleteSubject(ctx context.Context, subjectID string) error {
-	_, err := c.request(ctx, http.MethodDelete, "/api/v1/recognition/subjects/"+subjectID, nil, "")
+	if subjectID == "" || subjectID == "." || subjectID == ".." {
+		return fmt.Errorf("invalid subject identifier")
+	}
+	_, err := c.request(ctx, http.MethodDelete, "/api/v1/recognition/subjects/"+url.PathEscape(subjectID), nil, "")
 	return err
 }
 
@@ -386,13 +494,20 @@ func (c *Client) ListSubjects(ctx context.Context) ([]Subject, error) {
 	}
 
 	var result struct {
-		Subjects []Subject `json:"subjects"`
+		Subjects []string `json:"subjects"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 
-	return result.Subjects, nil
+	if result.Subjects == nil {
+		return nil, fmt.Errorf("missing subjects array")
+	}
+	subjects := make([]Subject, 0, len(result.Subjects))
+	for _, name := range result.Subjects {
+		subjects = append(subjects, Subject{SubjectID: name})
+	}
+	return subjects, nil
 }
 
 // AddFace 添加人脸到人脸库
@@ -413,6 +528,9 @@ func (c *Client) AddFaceFromBytes(ctx context.Context, subjectID string, imageDa
 
 // AddFaceFromReader 从 Reader 添加人脸
 func (c *Client) AddFaceFromReader(ctx context.Context, subjectID string, reader io.Reader, filename string, metadata map[string]interface{}) (*FaceRecord, error) {
+	if len(metadata) > 0 {
+		return nil, fmt.Errorf("CompreFace 1.2 does not persist metadata; store it in your application")
+	}
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
@@ -423,11 +541,6 @@ func (c *Client) AddFaceFromReader(ctx context.Context, subjectID string, reader
 
 	if _, err := io.Copy(part, reader); err != nil {
 		return nil, fmt.Errorf("failed to copy image data: %w", err)
-	}
-
-	if metadata != nil {
-		metadataJSON, _ := json.Marshal(metadata)
-		writer.WriteField("metadata", string(metadataJSON))
 	}
 
 	if err := writer.Close(); err != nil {
@@ -452,6 +565,9 @@ func (c *Client) AddFaceFromReader(ctx context.Context, subjectID string, reader
 
 // DeleteFace 删除人脸
 func (c *Client) DeleteFace(ctx context.Context, faceID string) error {
-	_, err := c.request(ctx, http.MethodDelete, "/api/v1/recognition/faces/"+faceID, nil, "")
+	if faceID == "" || faceID == "." || faceID == ".." {
+		return fmt.Errorf("invalid face identifier")
+	}
+	_, err := c.request(ctx, http.MethodDelete, "/api/v1/recognition/faces/"+url.PathEscape(faceID), nil, "")
 	return err
 }

@@ -97,7 +97,6 @@ const result = ref(null)
 const similarity = computed(() => {
   // API 返回 { result: [...] }，需要取 result.result
   const resultArray = result.value?.result || result.value
-  console.log('Result array:', JSON.stringify(resultArray))
   if (!resultArray || !Array.isArray(resultArray) || resultArray.length === 0) {
     return 0
   }
@@ -109,8 +108,7 @@ const similarity = computed(() => {
 })
 
 const isMatch = computed(() => {
-  // 相似度大于 0.5 认为是同一个人
-  return similarity.value > 0.5
+  return similarity.value >= 0.8
 })
 
 const handleImageChange = (file, index) => {
@@ -130,12 +128,16 @@ const handleCompare = async () => {
   }
   
   loading.value = true
+  result.value = null
   try {
     const formData = new FormData()
     formData.append('source_image', image1.value)
     formData.append('target_image', image2.value)
     
     const res = await compareFaces(formData)
+    if (res.result?.length !== 1 || res.result[0].face_matches?.length !== 1) {
+      throw new Error('Each image must contain exactly one face')
+    }
     result.value = res
     ElMessage.success('Comparison completed')
   } catch (error) {

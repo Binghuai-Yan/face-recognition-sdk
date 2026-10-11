@@ -1,204 +1,24 @@
-# FaceSDK 架构设计文档
-
-## 系统架构
+# 架构
 
 ```mermaid
-graph TB
-    subgraph "客户端层"
-        A[Java SDK]
-        B[Python SDK]
-        C[Go SDK]
-        D[Node.js SDK]
-        E[REST API 客户端]
-    end
-
-    subgraph "API 网关层"
-        F[Nginx/Traefik]
-    end
-
-    subgraph "服务层"
-        G[CompreFace API]
-        H[CompreFace Core]
-    end
-
-    subgraph "数据层"
-        I[(PostgreSQL)]
-        J[(Redis)]
-        K[(MinIO)]
-    end
-
-    subgraph "监控层"
-        L[Prometheus]
-        M[Grafana]
-    end
-
-    A --> F
-    B --> F
-    C --> F
-    D --> F
-    E --> F
-    F --> G
-    G --> H
-    H --> I
-    H --> J
-    H --> K
-    G --> L
-    L --> M
+flowchart LR
+  Clients[Python / Java / Go / Node / Vue] --> Gateway[TLS Nginx 或 Ingress]
+  Gateway --> Bundle[CompreFace Nginx / UI / API / admin / Core]
+  Bundle --> PG[(PostgreSQL: Subjects / embeddings / images)]
+  Probe[Blackbox exporter] --> Bundle
+  PGExporter[PostgreSQL exporter] --> PG
+  Probe --> Prometheus
+  PGExporter --> Prometheus
+  Prometheus --> Grafana
+  Prometheus --> Alertmanager
 ```
 
-## 组件说明
+生产 Compose 和 Kubernetes 使用 CompreFace 1.2 全功能镜像，通过 EXTERNAL_DB 和 JDBC 连接外部 PostgreSQL。测试 Compose 使用镜像内部 PostgreSQL，并持久化正确的 PGDATA 路径。CompreFace admin 负责数据库迁移。
 
-### 1. 客户端层
+服务密钥按 Detection、Recognition、Verification 分类；业务用户所有权由应用层实现。SDK 按服务选择密钥并归一化后端响应。特征提取结果的 Base64 是跨语言二进制编码，不构成加密。
 
-- **Java SDK**: 基于 OkHttp，支持 JDK 11+，兼容 Spring Boot
-- **Python SDK**: 基于 requests/aiohttp，支持 Python 3.8+，同步/异步双支持
-- **Go SDK**: 基于标准库 net/http，支持 Go 1.18+
-- **Node.js SDK**: 基于 axios，支持 Node.js 14+
+模型由 CompreFace Core 执行，模型和插件能力以实际镜像为准。Redis/MinIO 是可选应用基础设施，不参与当前 CompreFace 请求链。没有独立活体检测服务或 quality 插件实现。
 
-### 2. API 网关层
+依赖可用性通过 API consistence JSON 监控，数据库由 PG exporter 监控。没有虚构的 HTTP 业务指标、宿主 CPU 指标或未部署的导出器。Alertmanager 未默认配置外部通知。
 
-- **Nginx**: 反向代理、负载均衡、SSL 终止
-- **Traefik**: 云原生反向代理，支持自动服务发现
-
-### 3. 服务层
-
-- **CompreFace API**: REST API 接口层
-- **CompreFace Core**: 人脸识别核心引擎
-  - 人脸检测：MTCNN/RetinaFace
-  - 特征提取：FaceNet (128维) / ArcFace (512维)
-
-### 4. 数据层
-
-- **PostgreSQL**: 人脸特征和元数据存储
-- **Redis**: 缓存和会话存储
-- **MinIO**: 原始图片对象存储（可选）
-
-### 5. 监控层
-
-- **Prometheus**: 指标采集
-- **Grafana**: 可视化仪表盘
-
-## 数据流
-
-### 人脸注册流程
-
-```mermaid
-sequenceDiagram
-    participant Client as 客户端
-    participant API as CompreFace API
-    participant Core as 识别引擎
-    participant DB as PostgreSQL
-
-    Client->>API: 上传人脸图片
-    API->>Core: 检测人脸
-    Core-->>API: 人脸位置、特征向量
-    API->>DB: 存储特征向量
-    DB-->>API: 确认存储
-    API-->>Client: 返回注册结果
-```
-
-### 人脸识别流程
-
-```mermaid
-sequenceDiagram
-    participant Client as 客户端
-    participant API as CompreFace API
-    participant Core as 识别引擎
-    participant DB as PostgreSQL
-
-    Client->>API: 上传待识别图片
-    API->>Core: 提取特征向量
-    Core-->>API: 特征向量
-    API->>DB: 向量相似度搜索
-    DB-->>API: 匹配结果
-    API-->>Client: 返回识别结果
-```
-
-## 部署架构
-
-### Docker Compose 部署
-
-```mermaid
-graph TB
-    subgraph "Docker Network"
-        A[Nginx :80/443]
-        B[CompreFace :8000]
-        C[PostgreSQL :5432]
-        D[Redis :6379]
-        E[MinIO :9000]
-        F[Prometheus :9090]
-        G[Grafana :3000]
-    end
-
-    H[客户端] --> A
-    A --> B
-    B --> C
-    B --> D
-    B --> E
-    F --> B
-    G --> F
-```
-
-### Kubernetes 部署
-
-```mermaid
-graph TB
-    subgraph "Kubernetes Cluster"
-        A[Ingress Controller]
-        B[CompreFace Service]
-        C[CompreFace Pods]
-        D[PostgreSQL StatefulSet]
-        E[Redis StatefulSet]
-        F[MinIO StatefulSet]
-    end
-
-    G[客户端] --> A
-    A --> B
-    B --> C
-    C --> D
-    C --> E
-    C --> F
-```
-
-## 安全设计
-
-### 认证与授权
-
-- API Key 认证：每个请求必须携带 `x-api-key` 头部
-- HTTPS 传输：生产环境强制使用 TLS 1.2+
-- 请求限流：基于 IP 和 API Key 的限流保护
-
-### 数据安全
-
-- 人脸特征向量加密存储
-- 原始图片可选加密存储
-- 数据库连接使用 SSL
-- 定期备份策略
-
-## 性能优化
-
-### 缓存策略
-
-- Redis 缓存热点人脸特征
-- 本地缓存常用配置
-- CDN 加速静态资源
-
-### 水平扩展
-
-- 无状态 API 服务，支持多实例部署
-- 数据库读写分离
-- 负载均衡分发请求
-
-## 高可用设计
-
-### 故障转移
-
-- 多实例部署，自动故障转移
-- 数据库主从复制
-- Redis Sentinel 高可用
-
-### 数据备份
-
-- 自动定时备份
-- 跨区域备份
-- 快速恢复机制
+现有配置提供单数据库实例与持久化，不实现数据库故障切换、跨区复制、Redis Sentinel、向量/图片存储加密。传输 TLS 依赖提供证书并启用 gateway/Ingress；存储、备份加密及恢复演练由部署环境配置。扩容、真实模型精度和吞吐量需独立验证。

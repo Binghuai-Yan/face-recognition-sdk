@@ -111,26 +111,24 @@ const handleSearch = async () => {
   try {
     const formData = new FormData()
     formData.append('file', imageFile.value)
-    formData.append('limit', form.limit)
-    formData.append('prediction_threshold', form.threshold)
     
-    const res = await searchFace(formData)
+    const res = await searchFace(formData, form.limit)
     // API 返回 { result: [{ box, subjects: [{ subject, similarity }] }] }
     const resultArray = res.result || []
     // 提取所有匹配的 subjects
     const allMatches = []
     resultArray.forEach(r => {
       if (r.subjects && r.subjects.length > 0) {
-        r.subjects.forEach(s => {
+        r.subjects.filter(s => s.similarity >= form.threshold).forEach(s => {
           allMatches.push({
             subject: s.subject,
             similarity: s.similarity,
-            is_match: s.similarity > form.threshold
+            is_match: s.similarity >= form.threshold
           })
         })
       }
     })
-    results.value = allMatches
+    results.value = allMatches.sort((a, b) => b.similarity - a.similarity)
     ElMessage.success(`Found ${allMatches.length} matches`)
   } catch (error) {
     ElMessage.error(error.message || 'Search failed')

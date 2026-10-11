@@ -1,239 +1,126 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-FaceSDK Python SDK 集成测试
-使用真实 CompreFace 服务
-"""
+"""Opt-in tests against a real CompreFace model and persistent collection.
 
-import sys
+No downloads, fake images or swallowed failures. See tests/README.md.
+"""
+import base64
+import io
 import os
-import unittest
-import tempfile
-import requests
+import struct
+import sys
+import uuid
 from pathlib import Path
 
-# 添加 SDK 到路径
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "sdk" / "python"))
+import pytest
+from PIL import Image
 
-from facesdk import FaceSDKClient
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / 'sdk/python'))
+from facesdk import FaceSDKClient, AsyncFaceSDKClient
 from facesdk.exceptions import NoFaceException, ApiException
 
-# CompreFace 服务配置
-API_URL = "http://localhost:8000"
-API_KEY = "c9388ce5-0298-4e15-997c-86092c3f19b4"
+pytestmark = pytest.mark.skipif(os.getenv('FACESDK_LIVE') != '1', reason='Real CompreFace tests require FACESDK_LIVE=1, three service keys and a real single-face image')
 
 
-def download_test_image():
-    """下载一张测试人脸图片"""
-    # 使用公开的测试图片
-    test_urls = [
-        "https://raw.githubusercontent.com/opencv/opencv/master/samples/data/lena.jpg",
-    ]
-    
-    for url in test_urls:
+def config():
+    required = ['FACESDK_API_URL', 'FACESDK_DETECTION_API_KEY', 'FACESDK_RECOGNITION_API_KEY', 'FACESDK_VERIFICATION_API_KEY', 'FACESDK_TEST_IMAGE']
+    missing = [key for key in required if not os.getenv(key)]
+    assert not missing, 'Live test configuration missing: ' + ', '.join(missing)
+    image = Path(os.environ['FACESDK_TEST_IMAGE']).read_bytes()
+    with Image.open(io.BytesIO(image)) as decoded:
+        decoded.verify()
+    return os.environ['FACESDK_API_URL'], {service: os.environ[f'FACESDK_{service.upper()}_API_KEY'] for service in ['detection', 'recognition', 'verification']}, image
+
+
+@pytest.mark.parametrize('asynchronous', [False, True])
+@pytest.mark.asyncio
+async def test_real_lifecycle(asynchronous):
+    url, keys, image = config()
+    client = (AsyncFaceSDKClient if asynchronous else FaceSDKClient)(url, api_keys=keys, timeout=120, max_retries=0)
+    subject = 'facesdk-test-' + uuid.uuid4().hex
+    cleanup = False
+    async def call(method, *args, **kwargs):
+        result = getattr(client, method)(*args, **kwargs)
+        return await result if asynchronous else result
+    try:
+        assert (await call('detect', image)).face_count == 1
+        assert (await call('create_subject', subject)).subject_id == subject
+        cleanup = True
+        assert subject in [s.subject_id for s in await call('list_subjects')]
+        record = await call('add_face', subject, image)
+        assert record.image_id and record.subject_id == subject
+        search = await call('search', image, limit=100, threshold=0.8)
+        assert search.face_count == 1
+        assert any(match.subject_id == subject and match.match for match in search.results)
+        comparison = await call('compare', image, image)
+        assert comparison.match and 0.8 <= comparison.similarity <= 1
+        feature = base64.b64decode(await call('extract_feature', image), validate=True)
+        assert len(feature) > 0 and len(feature) % 4 == 0
+        assert all(abs(value) < float('inf') for value in struct.unpack('<%sf' % (len(feature) // 4), feature))
+        await call('delete_face', record.image_id)
+        if subject not in [s.subject_id for s in await call('list_subjects')]:
+            await call('create_subject', subject)
+        await call('delete_subject', subject)
+        cleanup = False
+        assert subject not in [s.subject_id for s in await call('list_subjects')]
+    finally:
         try:
-            resp = requests.get(url, timeout=10)
-            if resp.status_code == 200:
-                temp_file = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-                temp_file.write(resp.content)
-                temp_file.close()
-                print(f"[INFO] 下载测试图片: {temp_file.name} ({len(resp.content)} bytes)")
-                return temp_file.name
-        except Exception as e:
-            print(f"[WARN] 下载失败: {e}")
-            continue
-    
-    # 如果下载失败，创建一个简单的测试图片（不会检测到人脸）
-    print("[WARN] 无法下载测试图片，将使用本地生成图片")
-    temp_file = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
-    # 写入一个最小的 JPEG 文件头（无效但可以测试错误处理）
-    temp_file.write(b'\xff\xd8\xff\xe0\x00\x10JFIF')
-    temp_file.close()
-    return temp_file.name
-
-
-class TestFaceSDKIntegration(unittest.TestCase):
-    """FaceSDK 集成测试（真实服务）"""
-
-    @classmethod
-    def setUpClass(cls):
-        """测试类初始化"""
-        print(f"\n[INFO] 连接 CompreFace 服务: {API_URL}")
-        
-        # 健康检查
-        try:
-            resp = requests.get(f"{API_URL}/api/v1/consistence/status", timeout=5)
-            print(f"[INFO] 服务状态: {resp.status_code}")
-        except Exception as e:
-            print(f"[ERROR] 无法连接服务: {e}")
-            raise
-        
-        cls.client = FaceSDKClient(
-            api_url=API_URL,
-            api_key=API_KEY,
-            timeout=60,
-            max_retries=2,
-        )
-        
-        # 下载测试图片
-        cls.test_image = download_test_image()
-        cls.created_subjects = []
-
-    @classmethod
-    def tearDownClass(cls):
-        """测试类清理"""
-        # 清理测试数据
-        for subject_id in cls.created_subjects:
-            try:
-                cls.client.delete_subject(subject_id)
-                print(f"[INFO] 清理 Subject: {subject_id}")
-            except Exception:
-                pass
-        
-        # 删除临时文件
-        if os.path.exists(cls.test_image):
-            os.unlink(cls.test_image)
-        
-        cls.client.close()
-
-    def test_01_health_check(self):
-        """测试 1: 服务健康检查"""
-        print("\n[TEST] 服务健康检查")
-        resp = requests.get(f"{API_URL}/api/v1/consistence/status", timeout=5)
-        self.assertEqual(resp.status_code, 200)
-        print("[PASS] 服务健康")
-
-    def test_02_list_subjects_empty(self):
-        """测试 2: 列出人脸库（初始为空或包含默认数据）"""
-        print("\n[TEST] 列出人脸库")
-        subjects = self.client.list_subjects()
-        self.assertIsNotNone(subjects)
-        print(f"[PASS] 当前人脸库数量: {len(subjects)}")
-
-    def test_03_create_subject(self):
-        """测试 3: 创建人脸库"""
-        print("\n[TEST] 创建人脸库")
-        subject_id = "test_integration_001"
-        subject = self.client.create_subject(subject_id, "集成测试用户")
-        
-        self.assertIsNotNone(subject)
-        self.created_subjects.append(subject_id)
-        print(f"[PASS] 创建人脸库: {subject}")
-
-    def test_04_detect_face(self):
-        """测试 4: 人脸检测"""
-        print("\n[TEST] 人脸检测")
-        try:
-            result = self.client.detect(self.test_image)
-            self.assertIsNotNone(result)
-            print(f"[PASS] 检测到 {result.face_count} 张人脸")
-            if result.face_count > 0:
-                for face in result.faces:
-                    print(f"  - 置信度: {face.confidence:.4f}, 位置: {face.bounding_box}")
-        except NoFaceException:
-            print("[INFO] 图片中未检测到人脸（可能是测试图片问题）")
-        except Exception as e:
-            print(f"[WARN] 检测异常: {e}")
-
-    def test_05_add_face(self):
-        """测试 5: 添加人脸"""
-        print("\n[TEST] 添加人脸")
-        subject_id = "test_integration_001"
-        if subject_id not in self.created_subjects:
-            self.created_subjects.append(subject_id)
-        
-        try:
-            record = self.client.add_face(subject_id, self.test_image, {"source": "integration_test"})
-            self.assertIsNotNone(record)
-            print(f"[PASS] 添加人脸: {record.image_id}")
-        except NoFaceException:
-            print("[INFO] 图片中未检测到人脸，跳过添加")
-        except Exception as e:
-            print(f"[WARN] 添加异常: {e}")
-
-    def test_06_search_face(self):
-        """测试 6: 人脸搜索（1:N）"""
-        print("\n[TEST] 人脸搜索")
-        try:
-            result = self.client.search(self.test_image, limit=5)
-            self.assertIsNotNone(result)
-            print(f"[PASS] 搜索完成, 结果数: {len(result.results)}")
-            for match in result.results:
-                print(f"  - Subject: {match.subject_id}, 相似度: {match.similarity:.4f}")
-        except NoFaceException:
-            print("[INFO] 图片中未检测到人脸，跳过搜索")
-        except Exception as e:
-            print(f"[WARN] 搜索异常: {e}")
-
-    def test_07_delete_subject(self):
-        """测试 7: 删除人脸库"""
-        print("\n[TEST] 删除人脸库")
-        subject_id = "test_delete_001"
-        try:
-            self.client.create_subject(subject_id, "待删除用户")
-            self.created_subjects.append(subject_id)
-            
-            self.client.delete_subject(subject_id)
-            self.created_subjects.remove(subject_id)
-            print(f"[PASS] 删除人脸库: {subject_id}")
-        except Exception as e:
-            print(f"[WARN] 删除异常: {e}")
-
-    def test_08_no_face_error(self):
-        """测试 8: 无脸图片错误处理"""
-        print("\n[TEST] 无脸图片错误处理")
-        # 创建一个无脸图片
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
-            f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00')
-            temp_path = f.name
-        
-        try:
-            with self.assertRaises(NoFaceException):
-                self.client.detect(temp_path)
-            print("[PASS] 正确抛出 NoFaceException")
-        except Exception as e:
-            print(f"[WARN] 预期 NoFaceException 但得到: {type(e).__name__}: {e}")
+            if cleanup:
+                await call('delete_subject', subject)
         finally:
-            os.unlink(temp_path)
+            if asynchronous:
+                await client.close()
+            else:
+                client.close()
 
 
-class TestFaceSDKConcurrency(unittest.TestCase):
-    """并发测试"""
-
-    @classmethod
-    def setUpClass(cls):
-        cls.client = FaceSDKClient(api_url=API_URL, api_key=API_KEY, timeout=30)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.client.close()
-
-    def test_concurrent_health_checks(self):
-        """测试并发健康检查"""
-        print("\n[TEST] 并发健康检查")
-        import concurrent.futures
-        
-        def check(i):
-            try:
-                resp = requests.get(f"{API_URL}/api/v1/consistence/status", timeout=5)
-                return resp.status_code == 200
-            except:
-                return False
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(check, i) for i in range(10)]
-            results = [f.result() for f in concurrent.futures.as_completed(futures)]
-        
-        success_rate = sum(results) / len(results) * 100
-        print(f"[PASS] 并发测试: {sum(results)}/{len(results)} 成功 ({success_rate:.0f}%)")
-        self.assertTrue(success_rate >= 80, f"成功率过低: {success_rate}%")
+@pytest.mark.parametrize('asynchronous', [False, True])
+@pytest.mark.asyncio
+async def test_real_blank_image_and_authentication(asynchronous):
+    url, keys, _ = config()
+    buffer = io.BytesIO()
+    Image.new('RGB', (640, 480), 'white').save(buffer, format='PNG')
+    cls = AsyncFaceSDKClient if asynchronous else FaceSDKClient
+    client = cls(url, api_keys=keys, max_retries=0)
+    try:
+        with pytest.raises(NoFaceException):
+            if asynchronous:
+                await client.detect(buffer.getvalue())
+            else:
+                client.detect(buffer.getvalue())
+        client.api_keys['detection'] = str(uuid.uuid4())
+        # CompreFace 1.2 reports an unknown service key as HTTP 404.
+        with pytest.raises(ApiException) as invalid_key:
+            if asynchronous:
+                await client.detect(buffer.getvalue())
+            else:
+                client.detect(buffer.getvalue())
+        assert invalid_key.value.http_status_code == 404
+        assert invalid_key.value.error_code == 'HTTP_404'
+    finally:
+        if asynchronous:
+            await client.close()
+        else:
+            client.close()
 
 
-if __name__ == "__main__":
-    print("=" * 60)
-    print("FaceSDK 集成测试")
-    print(f"API URL: {API_URL}")
-    print(f"API Key: {API_KEY}")
-    print("=" * 60)
-    
-    unittest.main(verbosity=2)
+@pytest.mark.parametrize('asynchronous', [False, True])
+@pytest.mark.parametrize('input_kind', ['png-path', 'jpeg-stream'])
+@pytest.mark.asyncio
+async def test_real_image_formats_and_inputs(asynchronous, input_kind, tmp_path):
+    url, keys, image = config()
+    if input_kind == 'png-path':
+        value = tmp_path/'face.png'
+        with Image.open(io.BytesIO(image)) as decoded:
+            decoded.save(value, format='PNG')
+    else:
+        value = io.BytesIO(image)
+    client = (AsyncFaceSDKClient if asynchronous else FaceSDKClient)(url, api_keys=keys, timeout=120, max_retries=0)
+    try:
+        result = await client.detect(value) if asynchronous else client.detect(value)
+        assert result.face_count == 1
+    finally:
+        if asynchronous:
+            await client.close()
+        else:
+            client.close()
+        if hasattr(value, 'close'):
+            value.close()

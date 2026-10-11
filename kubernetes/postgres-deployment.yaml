@@ -1,9 +1,3 @@
-# File: facesdk/kubernetes/postgres-deployment.yaml
-# Copyright (c) 2024 FaceSDK Contributors
-# MIT License
-#
-# PostgreSQL Deployment
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,60 +18,67 @@ spec:
         component: database
     spec:
       containers:
-        - name: postgres
-          image: postgres:15-alpine
-          ports:
-            - containerPort: 5432
-              name: postgres
-          env:
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: facesdk-config
-                  key: POSTGRES_DB
-            - name: POSTGRES_USER
-              valueFrom:
-                configMapKeyRef:
-                  name: facesdk-config
-                  key: POSTGRES_USER
-            - name: POSTGRES_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: facesdk-secrets
-                  key: POSTGRES_PASSWORD
-            - name: PGDATA
-              value: "/var/lib/postgresql/data/pgdata"
-          volumeMounts:
-            - name: postgres-storage
-              mountPath: /var/lib/postgresql/data
-          resources:
-            requests:
-              memory: "1Gi"
-              cpu: "500m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
-          livenessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - compreface
-            initialDelaySeconds: 30
-            periodSeconds: 10
-          readinessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - compreface
-            initialDelaySeconds: 5
-            periodSeconds: 5
-      volumes:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+          name: postgres
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: facesdk-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: facesdk-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: facesdk-secrets
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
         - name: postgres-storage
-          persistentVolumeClaim:
-            claimName: postgres-pvc
-
+          mountPath: /var/lib/postgresql/data
+        - name: init-db
+          mountPath: /docker-entrypoint-initdb.d
+          readOnly: true
+        resources:
+          requests:
+            memory: 1Gi
+            cpu: 500m
+          limits:
+            memory: 2Gi
+            cpu: 2000m
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - compreface
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - compreface
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init-db
+        configMap:
+          name: postgres-init
+  strategy:
+    type: Recreate
 ---
 apiVersion: v1
 kind: Service
@@ -90,11 +91,10 @@ spec:
   selector:
     app: postgres
   ports:
-    - port: 5432
-      targetPort: 5432
-      name: postgres
+  - port: 5432
+    targetPort: 5432
+    name: postgres
   type: ClusterIP
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -103,8 +103,7 @@ metadata:
   namespace: facesdk
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi
-  storageClassName: standard

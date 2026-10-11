@@ -11,6 +11,7 @@ FaceSDK Python SDK - Data Models
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+from ._common import result_array
 
 
 @dataclass
@@ -57,14 +58,16 @@ class Face:
     landmarks: List[List[int]] = field(default_factory=list)
     confidence: float = 0.0
     quality: Optional[Quality] = None
+    embedding: List[float] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Face":
         return cls(
             bounding_box=BoundingBox.from_dict(data.get("box", {})),
             landmarks=data.get("landmarks", []),
-            confidence=data.get("confidence", 0.0),
+            confidence=data.get("confidence", data.get("box", {}).get("probability", 0.0)),
             quality=Quality.from_dict(data.get("quality", {})) if "quality" in data else None,
+            embedding=data.get("embedding", []),
         )
 
 
@@ -99,6 +102,8 @@ class Subject:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Subject":
+        if isinstance(data, str):
+            return cls(subject_id=data)
         return cls(
             subject_id=data.get("subject", ""),
             name=data.get("name", ""),
@@ -117,10 +122,11 @@ class DetectionResult:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DetectionResult":
+        faces = [Face.from_dict(f) for f in result_array(data, legacy="faces")]
         return cls(
-            faces=[Face.from_dict(f) for f in data.get("faces", [])],
+            faces=faces,
             image_id=data.get("image_id", ""),
-            face_count=data.get("face_count", 0),
+            face_count=len(faces),
         )
 
 
@@ -135,7 +141,24 @@ class CompareResult:
     face2: Optional[Face] = None
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "CompareResult":
+    def from_dict(cls, data: Dict[str, Any], threshold: float = 0.8) -> "CompareResult":
+        if "result" in data:
+            from .exceptions import NoFaceException, ValidationException
+            results = result_array(data)
+            if not results or not results[0].get("face_matches"):
+                raise NoFaceException()
+            if len(results) != 1 or len(results[0]["face_matches"]) != 1:
+                raise ValidationException("Comparison requires exactly one face in each image")
+            source = results[0]
+            target = source["face_matches"][0]
+            similarity = target["similarity"]
+            return cls(similarity=similarity, threshold=threshold,
+                       match=similarity >= threshold,
+                       face1=Face.from_dict(source["source_image_face"]),
+                       face2=Face.from_dict(target))
+        if "similarity" not in data:
+            from .exceptions import ApiException
+            raise ApiException("Missing verification result", "INVALID_RESPONSE")
         return cls(
             similarity=data.get("similarity", 0.0),
             distance=data.get("distance", 0.0),
@@ -174,7 +197,17 @@ class SearchResult:
     image_id: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "SearchResult":
+    def from_dict(cls, data: Dict[str, Any], threshold: Optional[float] = None) -> "SearchResult":
+        if "result" in data:
+            result_array(data)
+            minimum = 0.0 if threshold is None else threshold
+            matches = [MatchResult(subject_id=s["subject"], similarity=s["similarity"],
+                                   match=True, face=Face.from_dict(face))
+                       for face in data["result"] for s in face.get("subjects", [])
+                       if s["similarity"] >= minimum]
+            matches.sort(key=lambda match: match.similarity, reverse=True)
+            return cls(results=matches, face_count=len(data["result"]))
+        result_array(data, key="results")
         return cls(
             results=[MatchResult.from_dict(r) for r in data.get("results", [])],
             face_count=data.get("face_count", 0),

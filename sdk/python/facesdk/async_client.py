@@ -9,19 +9,22 @@ FaceSDK Python SDK - Asynchronous Client
 """
 
 import logging
+import asyncio
+import mimetypes
 from typing import Dict, Any, List, Optional, Union, BinaryIO
 from pathlib import Path
 
 import aiohttp
 import aiofiles
+from ._common import service_for, retryable, validate_search, encode_embedding, path_segment, result_array
 
 from .exceptions import (
-    FaceSDKException,
     NoFaceException,
     ApiException,
     AuthenticationException,
     RateLimitException,
     ServerException,
+    ValidationException,
 )
 from .models import (
     DetectionResult,
@@ -40,12 +43,14 @@ class AsyncFaceSDKClient:
     def __init__(
         self,
         api_url: str,
-        api_key: str,
+        api_key: str = "",
         timeout: int = 30,
         connect_timeout: int = 5,
         max_retries: int = 3,
         retry_delay: float = 0.5,
         verify_ssl: bool = True,
+        api_keys: Optional[Dict[str, str]] = None,
+        comparison_threshold: float = 0.8,
     ):
         """
         初始化 FaceSDK 异步客户端
@@ -65,6 +70,10 @@ class AsyncFaceSDKClient:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.verify_ssl = verify_ssl
+        self.api_keys = dict(api_keys or {})
+        self.comparison_threshold = comparison_threshold
+        if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0 or retry_delay < 0 or not 0 <= comparison_threshold <= 1:
+            raise ValueError("Invalid retry configuration or comparison threshold")
         self._session: Optional[aiohttp.ClientSession] = None
 
         logger.info(f"AsyncFaceSDKClient initialized with API URL: {api_url}")
@@ -89,33 +98,49 @@ class AsyncFaceSDKClient:
         url = f"{self.api_url}{endpoint}"
 
         session = await self._get_session()
-
-        for attempt in range(self.max_retries + 1):
+        factory = kwargs.pop("data_factory", None)
+        headers = dict(kwargs.pop("headers", {}))
+        key = self.api_keys.get(service_for(endpoint), self.api_key)
+        if not key:
+            raise AuthenticationException("Missing API key for " + service_for(endpoint))
+        headers["x-api-key"] = key
+        attempts = self.max_retries if retryable(method, endpoint) else 0
+        for attempt in range(attempts + 1):
             try:
+                if factory:
+                    kwargs["data"] = factory()
                 async with session.request(
-                    method, url, ssl=self.verify_ssl, **kwargs
+                    method, url, ssl=self.verify_ssl, headers=headers, **kwargs
                 ) as response:
+                    if response.status in (429, 500, 502, 503, 504) and attempt < attempts:
+                        await response.read()
+                        await asyncio.sleep(self.retry_delay * 2 ** attempt)
+                        continue
                     return await self._handle_response(response)
-            except aiohttp.ClientError as e:
-                if attempt < self.max_retries:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+                if attempt < attempts:
                     logger.warning(f"Request failed (attempt {attempt + 1}), retrying...")
-                    import asyncio
                     await asyncio.sleep(self.retry_delay * (2 ** attempt))
                 else:
-                    raise ApiException(f"Request failed after {self.max_retries + 1} attempts: {str(e)}")
+                    raise ApiException(f"Request failed after {attempts + 1} attempts: {str(e)}") from e
 
     async def _handle_response(self, response: aiohttp.ClientResponse) -> Dict[str, Any]:
         """处理 HTTP 响应"""
         try:
-            data = await response.json() if response.content else {}
-        except ValueError:
+            content = await response.read()
+            data = await response.json() if content else {}
+        except (ValueError, aiohttp.ContentTypeError) as e:
+            if 200 <= response.status < 300:
+                raise ApiException("API returned invalid JSON", "INVALID_RESPONSE") from e
             data = {}
 
-        if response.status in (200, 201):
+        if 200 <= response.status < 300:
+            if not isinstance(data, dict):
+                raise ApiException("API returned invalid JSON object", "INVALID_RESPONSE")
             return data
 
         # 处理错误
-        message = data.get("message") or data.get("error") or "Unknown error"
+        message = str(data.get("message") or data.get("error") or "Unknown error") if isinstance(data, dict) else "Unknown error"
 
         if response.status == 400:
             if "no face" in message.lower():
@@ -169,15 +194,11 @@ class AsyncFaceSDKClient:
         if isinstance(image, (str, Path)):
             filename = Path(image).name
 
-        data = aiohttp.FormData()
-        data.add_field("file", image_data, filename=filename, content_type="image/jpeg")
-        for key, value in options.items():
-            data.add_field(key, str(value))
-
         result = await self._request(
             "POST",
             "/api/v1/detection/detect",
-            data=data,
+            data_factory=lambda: self._form([("file", image_data, filename)]),
+            params={k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in options.items()},
         )
         return DetectionResult.from_dict(result)
 
@@ -203,16 +224,13 @@ class AsyncFaceSDKClient:
         image1_data = await self._read_file(image1)
         image2_data = await self._read_file(image2)
 
-        data = aiohttp.FormData()
-        data.add_field("file1", image1_data, filename="image1.jpg", content_type="image/jpeg")
-        data.add_field("file2", image2_data, filename="image2.jpg", content_type="image/jpeg")
-
         result = await self._request(
             "POST",
-            "/api/v1/recognition/compare",
-            data=data,
+            "/api/v1/verification/verify",
+            data_factory=lambda: self._form([("source_image", image1_data, "image1.jpg"),
+                                            ("target_image", image2_data, "image2.jpg")]),
         )
-        return CompareResult.from_dict(result)
+        return CompareResult.from_dict(result, self.comparison_threshold)
 
     # ==================== 人脸识别（1:N） ====================
 
@@ -234,21 +252,17 @@ class AsyncFaceSDKClient:
             SearchResult: 搜索结果
         """
         logger.debug(f"Searching faces with limit={limit} (async)")
+        validate_search(limit, threshold)
 
         image_data = await self._read_file(image)
-
-        data = aiohttp.FormData()
-        data.add_field("file", image_data, filename="image.jpg", content_type="image/jpeg")
-        data.add_field("limit", str(limit))
-        if threshold is not None:
-            data.add_field("threshold", str(threshold))
 
         result = await self._request(
             "POST",
             "/api/v1/recognition/recognize",
-            data=data,
+            data_factory=lambda: self._form([("file", image_data, "image.jpg")]),
+            params={"prediction_count": str(limit)},
         )
-        return SearchResult.from_dict(result)
+        return SearchResult.from_dict(result, threshold)
 
     # ==================== 特征提取 ====================
 
@@ -269,15 +283,13 @@ class AsyncFaceSDKClient:
 
         image_data = await self._read_file(image)
 
-        data = aiohttp.FormData()
-        data.add_field("file", image_data, filename="image.jpg", content_type="image/jpeg")
-
         result = await self._request(
             "POST",
-            "/api/v1/recognition/face",
-            data=data,
+            "/api/v1/detection/detect",
+            data_factory=lambda: self._form([("file", image_data, "image.jpg")]),
+            params={"face_plugins": "calculator"},
         )
-        return result.get("embedding", "")
+        return encode_embedding(result)
 
     # ==================== 人脸库管理 ====================
 
@@ -297,7 +309,7 @@ class AsyncFaceSDKClient:
         result = await self._request(
             "POST",
             "/api/v1/recognition/subjects",
-            json={"subject": subject_id, "name": name},
+            json={"subject": subject_id},
         )
         return Subject.from_dict(result)
 
@@ -309,7 +321,7 @@ class AsyncFaceSDKClient:
             subject_id: 人脸库 ID
         """
         logger.debug(f"Deleting subject: {subject_id} (async)")
-        await self._request("DELETE", f"/api/v1/recognition/subjects/{subject_id}")
+        await self._request("DELETE", f"/api/v1/recognition/subjects/{path_segment(subject_id)}")
 
     async def list_subjects(self) -> List[Subject]:
         """
@@ -320,7 +332,7 @@ class AsyncFaceSDKClient:
         """
         logger.debug("Listing all subjects (async)")
         result = await self._request("GET", "/api/v1/recognition/subjects")
-        return [Subject.from_dict(s) for s in result.get("subjects", [])]
+        return [Subject.from_dict(s) for s in result_array(result, key="subjects")]
 
     # ==================== 人脸管理 ====================
 
@@ -342,20 +354,16 @@ class AsyncFaceSDKClient:
             FaceRecord: 人脸记录
         """
         logger.debug(f"Adding face to subject: {subject_id} (async)")
+        if metadata:
+            raise ValidationException("CompreFace 1.2 does not persist metadata; store it in your application")
 
         image_data = await self._read_file(image)
-
-        data = aiohttp.FormData()
-        data.add_field("file", image_data, filename="image.jpg", content_type="image/jpeg")
-        if metadata:
-            import json
-            data.add_field("metadata", json.dumps(metadata))
 
         result = await self._request(
             "POST",
             "/api/v1/recognition/faces",
             params={"subject": subject_id},
-            data=data,
+            data_factory=lambda: self._form([("file", image_data, "image.jpg")]),
         )
         return FaceRecord.from_dict(result)
 
@@ -367,7 +375,15 @@ class AsyncFaceSDKClient:
             face_id: 人脸 ID
         """
         logger.debug(f"Deleting face: {face_id} (async)")
-        await self._request("DELETE", f"/api/v1/recognition/faces/{face_id}")
+        await self._request("DELETE", f"/api/v1/recognition/faces/{path_segment(face_id)}")
+
+    @staticmethod
+    def _form(parts):
+        data = aiohttp.FormData()
+        for field, content, filename in parts:
+            data.add_field(field, content, filename=filename,
+                           content_type=mimetypes.guess_type(filename)[0] or "application/octet-stream")
+        return data
 
     async def close(self):
         """关闭客户端"""

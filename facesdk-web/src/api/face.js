@@ -1,6 +1,12 @@
 import axios from 'axios'
 
 const API_BASE = '/api/v1'
+const segment = value => {
+  if (typeof value !== 'string' || !value || value === '.' || value === '..') {
+    throw new Error('Identifier must not be empty or a dot segment')
+  }
+  return encodeURIComponent(value)
+}
 
 // CompreFace 不同服务使用不同的 API Key
 const getApiKey = (service) => {
@@ -24,8 +30,7 @@ apiClient.interceptors.request.use((config) => {
     service = 'verification'
   } else if (url.includes('/recognition/')) {
     service = 'recognition'
-  } else if (url.includes('/anti-spoofing/')) {
-    service = 'antispoofing'
+
   }
 
   const apiKey = getApiKey(service)
@@ -36,8 +41,8 @@ apiClient.interceptors.request.use((config) => {
 })
 
 // 人脸检测 - Detection 服务
-export const detectFace = (formData, plugins = []) => {
-  const params = {}
+export const detectFace = (formData, plugins = [], threshold = 0.5) => {
+  const params = { det_prob_threshold: threshold }
   if (plugins.length > 0) {
     params.face_plugins = plugins.join(',')
   }
@@ -55,8 +60,9 @@ export const compareFaces = (formData) => {
 }
 
 // 人脸搜索 - Recognition 服务
-export const searchFace = (formData) => {
+export const searchFace = (formData, predictionCount = 1) => {
   return apiClient.post('/recognition/recognize', formData, {
+    params: { prediction_count: predictionCount },
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(res => res.data)
 }
@@ -67,14 +73,14 @@ export const getSubjects = () => {
 }
 
 // 创建人脸库 - Recognition 服务
-export const createSubject = (subjectId, name = '') => {
-  return apiClient.post('/recognition/subjects', { subject: subjectId, name })
+export const createSubject = (subjectId) => {
+  return apiClient.post('/recognition/subjects', { subject: subjectId })
     .then(res => res.data)
 }
 
 // 删除人脸库 - Recognition 服务
 export const deleteSubject = (subjectId) => {
-  return apiClient.delete(`/recognition/subjects/${subjectId}`)
+  return apiClient.delete(`/recognition/subjects/${segment(subjectId)}`)
 }
 
 // 添加人脸 - Recognition 服务
@@ -87,19 +93,12 @@ export const addFace = (subjectId, formData) => {
 
 // 删除人脸 - Recognition 服务
 export const deleteFace = (faceId) => {
-  return apiClient.delete(`/recognition/faces/${faceId}`)
+  return apiClient.delete(`/recognition/faces/${segment(faceId)}`)
 }
 
 // 获取指定人脸库的人脸列表 - Recognition 服务
-export const getFaces = (subjectId) => {
+export const getFaces = (subjectId, page = 0, size = 20) => {
   return apiClient.get('/recognition/faces', {
-    params: { subject: subjectId }
-  }).then(res => res.data.faces || [])
-}
-
-// RGB 活体检测 - Anti-spoofing 服务
-export const checkLiveness = (formData) => {
-  return apiClient.post('/anti-spoofing/check', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    params: { subject: subjectId, page, size }
   }).then(res => res.data)
 }

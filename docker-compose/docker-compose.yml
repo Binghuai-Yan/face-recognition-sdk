@@ -1,241 +1,166 @@
-# File: facesdk/docker-compose/docker-compose.yml
-# Copyright (c) 2024 FaceSDK Contributors
-# MIT License
-#
-# FaceSDK - CompreFace Production Deployment
-# 生产级 Docker Compose 配置
-
-version: '3.8'
-
+# CompreFace 1.2 includes API, admin, Core and UI. PostgreSQL is external.
 services:
-  # CompreFace Core API 服务
   compreface-api:
     image: exadel/compreface:1.2.0
-    container_name: facesdk-compreface-api
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
-      - POSTGRES_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
-      - API_KEY=${COMPREFACE_API_KEY}
-      - LOGGING_LEVEL=${LOGGING_LEVEL:-INFO}
-      - MAX_REQUEST_SIZE=${MAX_REQUEST_SIZE:-10485760}
-      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-10485760}
-      - WORKERS=${WORKERS:-4}
-      - THREADS=${THREADS:-4}
-      - TIMEOUT=${TIMEOUT:-120}
-      - KEEP_ALIVE=${KEEP_ALIVE:-5}
+      EXTERNAL_DB: "true"
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-compreface}
+      POSTGRES_USER: ${POSTGRES_USER:-compreface}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      MAX_REQUEST_SIZE: ${MAX_REQUEST_SIZE:-10MB}
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-5MB}
+      UWSGI_PROCESSES: ${WORKERS:-2}
+      UWSGI_THREADS: ${THREADS:-1}
+      SAVE_IMAGES_TO_DB: "true"
     ports:
-      - "${COMPREFACE_PORT:-8000}:80"
-    volumes:
-      - compreface-data:/app/data
-      - compreface-logs:/app/logs
-      - ./models:/app/models:ro
-    networks:
-      - facesdk-network
+      - "${COMPREFACE_BIND_ADDRESS:-127.0.0.1}:${COMPREFACE_PORT:-8000}:80"
+    networks: [facesdk-network]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/consistence/status | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get(\"status\") == \"OK\" else 1)'"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 180s
     deploy:
       resources:
         limits:
           cpus: '${CPU_LIMIT:-4}'
           memory: ${MEMORY_LIMIT:-8G}
-        reservations:
-          cpus: '${CPU_RESERVATION:-2}'
-          memory: ${MEMORY_RESERVATION:-4G}
-    # GPU 支持（可选）
-    # 如需启用 GPU，取消下方注释：
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
-  # CompreFace Web UI（可选）
-  compreface-ui:
-    image: exadel/compreface-fe:1.2.0
-    container_name: facesdk-compreface-ui
-    restart: unless-stopped
-    depends_on:
-      - compreface-api
-    environment:
-      - API_URL=http://compreface-api:80
-    ports:
-      - "${COMPREFACE_UI_PORT:-8001}:80"
-    networks:
-      - facesdk-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # PostgreSQL 数据库
   postgres:
     image: postgres:15-alpine
-    container_name: facesdk-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - PGDATA=/var/lib/postgresql/data/pgdata
+      POSTGRES_USER: ${POSTGRES_USER:-compreface}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-compreface}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init-scripts:/docker-entrypoint-initdb.d:ro
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    networks:
-      - facesdk-network
+    networks: [facesdk-network]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '2'
-          memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
+      retries: 10
 
-  # Redis 缓存
-  redis:
-    image: redis:7-alpine
-    container_name: facesdk-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy allkeys-lru
-    volumes:
-      - redis-data:/data
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    networks:
-      - facesdk-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
-
-  # MinIO 对象存储（可选，用于存储原始图片）
-  minio:
-    image: minio/minio:RELEASE.2024-01-01T16-36-33Z
-    container_name: facesdk-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
-      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_BROWSER_REDIRECT_URL=http://localhost:${MINIO_CONSOLE_PORT:-9001}
-    volumes:
-      - minio-data:/data
-    ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
-    networks:
-      - facesdk-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Nginx 反向代理（可选，用于生产环境）
+  # TLS gateway. Supply nginx/ssl/fullchain.pem and privkey.pem before enabling.
   nginx:
-    image: nginx:alpine
-    container_name: facesdk-nginx
+    image: nginx:1.26-alpine
+    profiles: [gateway]
     restart: unless-stopped
     depends_on:
-      - compreface-api
+      compreface-api:
+        condition: service_healthy
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
-      - nginx-logs:/var/log/nginx
     ports:
       - "${NGINX_HTTP_PORT:-80}:80"
       - "${NGINX_HTTPS_PORT:-443}:443"
-    networks:
-      - facesdk-network
+    networks: [facesdk-network]
 
-  # Prometheus 监控（可选）
-  prometheus:
-    image: prom/prometheus:v2.48.0
-    container_name: facesdk-prometheus
-    restart: unless-stopped
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
-    volumes:
-      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus-data:/prometheus
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    networks:
-      - facesdk-network
-
-  # Grafana 仪表盘（可选）
-  grafana:
-    image: grafana/grafana:10.2.3
-    container_name: facesdk-grafana
+  # CompreFace uses its built-in cache; this store is for application integrations.
+  redis:
+    image: redis:7-alpine
+    profiles: [cache]
     restart: unless-stopped
     environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - ../monitoring/grafana/dashboard.json:/etc/grafana/provisioning/dashboards/facesdk-dashboard.json:ro
-      - grafana-data:/var/lib/grafana
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    command: ["sh", "-c", "test -n \"$$REDIS_PASSWORD\" && exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\" --maxmemory 512mb --maxmemory-policy allkeys-lru"]
+    volumes: [redis-data:/data]
+    networks: [facesdk-network]
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional application image store; CompreFace itself saves images in PostgreSQL.
+  minio:
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    profiles: [storage]
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+    volumes: [minio-data:/data]
     ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    networks:
-      - facesdk-network
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    networks: [facesdk-network]
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    profiles: [monitoring]
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d"]
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"]
+    depends_on: [blackbox-exporter, postgres-exporter, alertmanager]
+    networks: [facesdk-network]
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    profiles: [monitoring]
+    volumes:
+      - ../monitoring/blackbox/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    networks: [facesdk-network]
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    profiles: [monitoring]
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${POSTGRES_DB:-compreface}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER:-compreface}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    networks: [facesdk-network]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/alertmanager/alertmanager.yml"]
+    volumes:
+      - ../monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    ports: ["127.0.0.1:9093:9093"]
+    networks: [facesdk-network]
+
+  grafana:
+    image: grafana/grafana:10.2.3
+    profiles: [monitoring]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../monitoring/grafana/dashboard.json:/var/lib/grafana/dashboards/facesdk.json:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:${GRAFANA_PORT:-3000}:3000"]
+    networks: [facesdk-network]
 
 volumes:
-  compreface-data:
-    driver: local
-  compreface-logs:
-    driver: local
   postgres-data:
-    driver: local
   redis-data:
-    driver: local
   minio-data:
-    driver: local
-  nginx-logs:
-    driver: local
   prometheus-data:
-    driver: local
+  alertmanager-data:
   grafana-data:
-    driver: local
 
 networks:
   facesdk-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16

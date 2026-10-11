@@ -1,136 +1,33 @@
-# FaceSDK Python SDK
+# Python SDK
 
-FaceSDK Python 客户端库，提供人脸识别、人脸检测、人脸比对等功能。
+Python 3.8+，支持同步 requests 和异步 aiohttp；安装时自动包含 aiofiles。
 
-## 安装
-
-```bash
-pip install facesdk-python
+```sh
+python -m pip install ./sdk/python
 ```
-
-## 快速开始
-
-### 同步客户端
 
 ```python
-from facesdk import FaceSDKClient
+import os
+from facesdk import FaceSDKClient, AsyncFaceSDKClient
+keys = {s: os.environ[f"FACESDK_{s.upper()}_API_KEY"]
+        for s in ("detection", "recognition", "verification")}
+with FaceSDKClient("http://localhost:8000", api_keys=keys) as client:
+    detection = client.detect("face.jpg", face_plugins="age,gender", status=True)
+    comparison = client.compare("face.jpg", "face2.jpg")
+    matches = client.search("face.jpg", limit=5, threshold=0.8)
+    feature = client.extract_feature("face.jpg")
+    client.create_subject("alice")
+    record = client.add_face("alice", "face.jpg")
+    print([s.subject_id for s in client.list_subjects()])
+    client.delete_subject("alice")
 
-# 初始化客户端
-client = FaceSDKClient(
-    api_url="http://localhost:8000",
-    api_key="your-api-key",
-    timeout=30,
-    max_retries=3,
-)
-
-# 人脸检测
-result = client.detect("/path/to/image.jpg")
-print(f"检测到 {result.face_count} 张人脸")
-for face in result.faces:
-    print(f"置信度: {face.confidence}")
-    print(f"位置: {face.bounding_box}")
-
-# 人脸比对
-result = client.compare("/path/to/face1.jpg", "/path/to/face2.jpg")
-print(f"相似度: {result.similarity}")
-print(f"是否匹配: {result.match}")
-
-# 人脸识别（1:N）
-result = client.search("/path/to/query.jpg", limit=5)
-for match in result.results:
-    print(f"Subject: {match.subject_id}, 相似度: {match.similarity}")
-
-# 人脸库管理
-subject = client.create_subject("user_001", "张三")
-record = client.add_face("user_001", "/path/to/face.jpg")
-
-# 关闭客户端
-client.close()
+async def detect_async():
+    async with AsyncFaceSDKClient("http://localhost:8000", api_keys=keys) as client:
+        return await client.detect("face.jpg")
 ```
 
-### 异步客户端
+所有图片参数接受路径、Path、bytes 或二进制文件对象。超时单位为秒；默认连接 5 秒、请求/读取 30 秒、最多重试 3 次、初始延迟 0.5 秒；异步 timeout 是一次请求的总超时。`comparison_threshold` 默认 0.8，`verify_ssl` 默认 true。
 
-```python
-import asyncio
-from facesdk import AsyncFaceSDKClient
+异常基类 `FaceSDKException`，常见子类为 `NoFaceException`、`AuthenticationException`、`ValidationException`、`ApiException`。模型可通过属性访问：`DetectionResult.faces/face_count`、`CompareResult.similarity/match`、`SearchResult.results`、`MatchResult.subject_id/similarity`。
 
-async def main():
-    # 初始化异步客户端
-    client = AsyncFaceSDKClient(
-        api_url="http://localhost:8000",
-        api_key="your-api-key",
-    )
-
-    try:
-        # 人脸检测
-        result = await client.detect("/path/to/image.jpg")
-        print(f"检测到 {result.face_count} 张人脸")
-
-        # 人脸比对
-        result = await client.compare("/path/to/face1.jpg", "/path/to/face2.jpg")
-        print(f"相似度: {result.similarity}")
-
-        # 人脸识别
-        result = await client.search("/path/to/query.jpg", limit=5)
-        for match in result.results:
-            print(f"Subject: {match.subject_id}, 相似度: {match.similarity}")
-
-    finally:
-        await client.close()
-
-# 运行
-asyncio.run(main())
-```
-
-### 上下文管理器
-
-```python
-# 同步
-with FaceSDKClient(api_url="http://localhost:8000", api_key="your-api-key") as client:
-    result = client.detect("/path/to/image.jpg")
-    print(result)
-
-# 异步
-async with AsyncFaceSDKClient(api_url="http://localhost:8000", api_key="your-api-key") as client:
-    result = await client.detect("/path/to/image.jpg")
-    print(result)
-```
-
-## 异常处理
-
-```python
-from facesdk import (
-    FaceSDKClient,
-    NoFaceException,
-    ApiException,
-    AuthenticationException,
-)
-
-client = FaceSDKClient(api_url="http://localhost:8000", api_key="your-api-key")
-
-try:
-    result = client.detect("/path/to/image.jpg")
-except NoFaceException as e:
-    print(f"未检测到人脸: {e}")
-except AuthenticationException as e:
-    print(f"认证失败: {e}")
-except ApiException as e:
-    print(f"API 错误: {e}")
-    print(f"HTTP 状态码: {e.http_status_code}")
-    print(f"错误代码: {e.error_code}")
-```
-
-## 配置选项
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| api_url | - | API 基础 URL |
-| api_key | - | API 密钥 |
-| timeout | 30 | 请求超时时间（秒） |
-| max_retries | 3 | 最大重试次数 |
-| retry_delay | 0.5 | 重试延迟（秒） |
-| verify_ssl | True | 是否验证 SSL 证书 |
-
-## 许可证
-
-MIT License
+密钥、阈值、重试、metadata/name 兼容行为和特征编码详见 [协议](../../docs/protocol.md)。测试运行：`python -m pytest sdk/python/tests`（仓库根目录）。

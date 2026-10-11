@@ -14,6 +14,8 @@ import com.ruoyi.common.core.domain.AjaxResult;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.facesdk.service.FaceService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import com.ruoyi.common.utils.SecurityUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @RestController
 @RequestMapping("/face")
+@PreAuthorize("isAuthenticated()")
 public class FaceController extends BaseController {
 
     @Autowired
@@ -40,13 +43,15 @@ public class FaceController extends BaseController {
     @PostMapping("/register")
     public AjaxResult register(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("userId") String userId,
-            @RequestParam("userName") String userName) {
+            @RequestParam(value = "userId", required = false) String userId,
+            @RequestParam(value = "userName", required = false) String userName) {
+        String actor = SecurityUtils.getUserId().toString();
+        if (userId != null && !actor.equals(userId)) return AjaxResult.error("只能管理本人绑定的人脸");
         try {
-            return faceService.registerFace(file, userId, userName);
+            return faceService.registerFace(file, actor, "");
         } catch (Exception e) {
             logger.error("人脸注册失败", e);
-            return AjaxResult.error("人脸注册失败: " + e.getMessage());
+            return AjaxResult.error("人脸注册失败");
         }
     }
 
@@ -63,7 +68,7 @@ public class FaceController extends BaseController {
             return faceService.loginByFace(file);
         } catch (Exception e) {
             logger.error("人脸登录失败", e);
-            return AjaxResult.error("人脸登录失败: " + e.getMessage());
+            return AjaxResult.error("人脸登录失败");
         }
     }
 
@@ -83,7 +88,7 @@ public class FaceController extends BaseController {
             return faceService.compareFaces(file1, file2);
         } catch (Exception e) {
             logger.error("人脸比对失败", e);
-            return AjaxResult.error("人脸比对失败: " + e.getMessage());
+            return AjaxResult.error("人脸比对失败");
         }
     }
 
@@ -100,7 +105,7 @@ public class FaceController extends BaseController {
             return faceService.detectFace(file);
         } catch (Exception e) {
             logger.error("人脸检测失败", e);
-            return AjaxResult.error("人脸检测失败: " + e.getMessage());
+            return AjaxResult.error("人脸检测失败");
         }
     }
 
@@ -117,7 +122,7 @@ public class FaceController extends BaseController {
             return faceService.deleteFace(userId);
         } catch (Exception e) {
             logger.error("删除人脸失败", e);
-            return AjaxResult.error("删除人脸失败: " + e.getMessage());
+            return AjaxResult.error("删除人脸失败");
         }
     }
 
@@ -133,7 +138,7 @@ public class FaceController extends BaseController {
             return faceService.checkFaceExists(userId);
         } catch (Exception e) {
             logger.error("检查人脸失败", e);
-            return AjaxResult.error("检查人脸失败: " + e.getMessage());
+            return AjaxResult.error("检查人脸失败");
         }
     }
 }

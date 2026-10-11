@@ -1,0 +1,12 @@
+modules:
+  compreface_health:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      fail_if_header_not_matches:
+        - header: Content-Type
+          regexp: application/json.*
+      fail_if_body_not_matches_regexp:
+        - '"status"\s*:\s*"OK"'

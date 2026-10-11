@@ -6,7 +6,7 @@
           <span>{{ $t('api.title') }}</span>
         </div>
       </template>
-      
+
       <el-alert
         :title="$t('api.intro')"
         type="info"
@@ -14,7 +14,7 @@
         show-icon
         style="margin-bottom: 20px"
       />
-      
+
       <!-- Detection API -->
       <el-collapse v-model="activeNames">
         <el-collapse-item name="detection">
@@ -25,14 +25,14 @@
               <span class="api-desc">{{ $t('api.detection.desc') }}</span>
             </div>
           </template>
-          
+
           <div class="api-content">
             <h4>{{ $t('api.headers') }}</h4>
             <el-descriptions :column="1" border>
               <el-descriptions-item label="x-api-key">{{ $t('api.detection.apiKey') }}</el-descriptions-item>
               <el-descriptions-item label="Content-Type">multipart/form-data</el-descriptions-item>
             </el-descriptions>
-            
+
             <h4>{{ $t('api.params') }}</h4>
             <el-table :data="detectionParams" border>
               <el-table-column prop="name" :label="$t('api.paramName')" width="150" />
@@ -46,13 +46,12 @@
               </el-table-column>
               <el-table-column prop="desc" :label="$t('api.description')" />
             </el-table>
-            
+
             <h4>{{ $t('api.example') }}</h4>
-            <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/detection/detect" \
+            <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/detection/detect?det_prob_threshold=0.5" \
   -H "x-api-key: {{ $t('api.yourApiKey') }}" \
-  -F "file=@image.jpg" \
-  -F "det_prob_threshold=0.5"</code></pre>
-            
+  -F "file=@image.jpg"</code></pre>
+
             <h4>{{ $t('api.response') }}</h4>
             <pre class="code-block"><code>{
   "result": [{
@@ -67,7 +66,7 @@
 }</code></pre>
           </div>
         </el-collapse-item>
-        
+
         <!-- Verification API -->
         <el-collapse-item name="verification">
           <template #title>
@@ -77,14 +76,14 @@
               <span class="api-desc">{{ $t('api.verification.desc') }}</span>
             </div>
           </template>
-          
+
           <div class="api-content">
             <h4>{{ $t('api.headers') }}</h4>
             <el-descriptions :column="1" border>
               <el-descriptions-item label="x-api-key">{{ $t('api.verification.apiKey') }}</el-descriptions-item>
               <el-descriptions-item label="Content-Type">multipart/form-data</el-descriptions-item>
             </el-descriptions>
-            
+
             <h4>{{ $t('api.params') }}</h4>
             <el-table :data="verificationParams" border>
               <el-table-column prop="name" :label="$t('api.paramName')" width="150" />
@@ -98,13 +97,13 @@
               </el-table-column>
               <el-table-column prop="desc" :label="$t('api.description')" />
             </el-table>
-            
+
             <h4>{{ $t('api.example') }}</h4>
             <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/verification/verify" \
   -H "x-api-key: {{ $t('api.yourApiKey') }}" \
   -F "source_image=@face1.jpg" \
   -F "target_image=@face2.jpg"</code></pre>
-            
+
             <h4>{{ $t('api.response') }}</h4>
             <pre class="code-block"><code>{
   "result": [{
@@ -117,7 +116,7 @@
 }</code></pre>
           </div>
         </el-collapse-item>
-        
+
         <!-- Recognition API -->
         <el-collapse-item name="recognition">
           <template #title>
@@ -127,14 +126,14 @@
               <span class="api-desc">{{ $t('api.recognition.desc') }}</span>
             </div>
           </template>
-          
+
           <div class="api-content">
             <h4>{{ $t('api.headers') }}</h4>
             <el-descriptions :column="1" border>
               <el-descriptions-item label="x-api-key">{{ $t('api.recognition.apiKey') }}</el-descriptions-item>
               <el-descriptions-item label="Content-Type">multipart/form-data</el-descriptions-item>
             </el-descriptions>
-            
+
             <h4>{{ $t('api.params') }}</h4>
             <el-table :data="recognitionParams" border>
               <el-table-column prop="name" :label="$t('api.paramName')" width="150" />
@@ -148,67 +147,16 @@
               </el-table-column>
               <el-table-column prop="desc" :label="$t('api.description')" />
             </el-table>
-            
+
             <h4>{{ $t('api.example') }}</h4>
-            <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/recognition/recognize" \
-  -H "x-api-key: {{ $t('api.yourApiKey') }}" \
-  -F "file=@image.jpg" \
-  -F "limit=5" \
-  -F "prediction_threshold=0.8"</code></pre>
-          </div>
-        </el-collapse-item>
-        
-        <!-- Anti-spoofing API -->
-        <el-collapse-item name="antispoofing">
-          <template #title>
-            <div class="api-title">
-              <el-tag type="success">POST</el-tag>
-              <span class="api-path">/api/v1/anti-spoofing/check</span>
-              <span class="api-desc">{{ $t('api.antispoofing.desc') }}</span>
-            </div>
-          </template>
-          
-          <div class="api-content">
-            <h4>{{ $t('api.headers') }}</h4>
-            <el-descriptions :column="1" border>
-              <el-descriptions-item label="x-api-key">{{ $t('api.antispoofing.apiKey') }}</el-descriptions-item>
-              <el-descriptions-item label="Content-Type">multipart/form-data</el-descriptions-item>
-            </el-descriptions>
-            
-            <h4>{{ $t('api.params') }}</h4>
-            <el-table :data="antispoofingParams" border>
-              <el-table-column prop="name" :label="$t('api.paramName')" width="150" />
-              <el-table-column prop="type" :label="$t('api.paramType')" width="100" />
-              <el-table-column prop="required" :label="$t('api.required')" width="100">
-                <template #default="{ row }">
-                  <el-tag :type="row.required ? 'danger' : 'info'">
-                    {{ row.required ? $t('api.yes') : $t('api.no') }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="desc" :label="$t('api.description')" />
-            </el-table>
-            
-            <h4>{{ $t('api.example') }}</h4>
-            <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/anti-spoofing/check" \
+            <pre class="code-block"><code>curl -X POST "{{ baseUrl }}/api/v1/recognition/recognize?prediction_count=5" \
   -H "x-api-key: {{ $t('api.yourApiKey') }}" \
   -F "file=@image.jpg"</code></pre>
-            
-            <h4>{{ $t('api.response') }}</h4>
-            <pre class="code-block"><code>{
-  "result": 0.95
-}</code></pre>
-            <el-alert
-              :title="$t('api.antispoofing.hint')"
-              type="info"
-              :closable="false"
-              show-icon
-              style="margin-top: 10px"
-            />
           </div>
         </el-collapse-item>
+
       </el-collapse>
-      
+
       <!-- Threshold Reference -->
       <el-card style="margin-top: 20px">
         <template #header>
@@ -216,7 +164,6 @@
         </template>
         <el-descriptions :column="1" border>
           <el-descriptions-item :label="$t('api.detectionThreshold')">0.5</el-descriptions-item>
-          <el-descriptions-item :label="$t('api.livenessThreshold')">0.5 ({{ $t('api.livenessHint2') }})</el-descriptions-item>
           <el-descriptions-item :label="$t('api.compareThreshold1')">0.80 ({{ $t('api.compareHint1') }})</el-descriptions-item>
           <el-descriptions-item :label="$t('api.compareThreshold2')">0.82 ({{ $t('api.compareHint2') }})</el-descriptions-item>
         </el-descriptions>
@@ -249,13 +196,9 @@ const verificationParams = computed(() => [
 
 const recognitionParams = computed(() => [
   { name: 'file', type: 'File', required: true, desc: t('api.recognition.paramFile') },
-  { name: 'limit', type: 'Integer', required: false, desc: t('api.recognition.paramLimit') },
-  { name: 'prediction_threshold', type: 'Float', required: false, desc: t('api.recognition.paramThreshold') }
+  { name: 'prediction_count', type: 'Integer', required: false, desc: t('api.recognition.paramLimit') }
 ])
 
-const antispoofingParams = computed(() => [
-  { name: 'file', type: 'File', required: true, desc: t('api.antispoofing.paramFile') }
-])
 </script>
 
 <style scoped>

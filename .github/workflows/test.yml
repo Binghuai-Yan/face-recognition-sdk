@@ -1,0 +1,20 @@
+name: Repository checks
+on: [push, pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17', cache: maven}
+      - uses: actions/setup-go@v5
+        with: {go-version: '1.23', cache: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - run: python -m pip install -r tests/requirements.txt
+      - run: python tests/run_all.py --race --audit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: test-results, path: test-results}

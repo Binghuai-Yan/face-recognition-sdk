@@ -13,6 +13,8 @@ import com.facesdk.config.FaceSDKConfig;
 import com.facesdk.exception.FaceSDKException;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * FaceSDK Java 客户端主类
@@ -32,7 +34,7 @@ import java.time.Duration;
  * @author FaceSDK Team
  * @version 1.0.0
  */
-public class FaceSDK {
+public class FaceSDK implements AutoCloseable {
 
     private final FaceSDKClient client;
 
@@ -49,6 +51,11 @@ public class FaceSDK {
         return client;
     }
 
+    @Override
+    public void close() {
+        client.close();
+    }
+
     /**
      * 创建 FaceSDK 构建器
      *
@@ -63,7 +70,9 @@ public class FaceSDK {
      */
     public static class FaceSDKBuilder {
         private String apiUrl;
-        private String apiKey;
+        private String apiKey = "";
+        private final Map<String, String> apiKeys = new HashMap<>();
+        private double comparisonThreshold = 0.8;
         private Duration connectTimeout = Duration.ofSeconds(5);
         private Duration readTimeout = Duration.ofSeconds(30);
         private Duration writeTimeout = Duration.ofSeconds(30);
@@ -94,6 +103,11 @@ public class FaceSDK {
             this.apiKey = apiKey;
             return this;
         }
+
+        public FaceSDKBuilder detectionApiKey(String key) { apiKeys.put("detection", key); return this; }
+        public FaceSDKBuilder recognitionApiKey(String key) { apiKeys.put("recognition", key); return this; }
+        public FaceSDKBuilder verificationApiKey(String key) { apiKeys.put("verification", key); return this; }
+        public FaceSDKBuilder comparisonThreshold(double threshold) { comparisonThreshold = threshold; return this; }
 
         /**
          * 设置连接超时时间
@@ -177,7 +191,9 @@ public class FaceSDK {
                 writeTimeout,
                 maxRetries,
                 retryDelay,
-                verifySsl
+                verifySsl,
+                apiKeys,
+                comparisonThreshold
             );
             return new FaceSDK(config);
         }
@@ -186,11 +202,14 @@ public class FaceSDK {
             if (apiUrl == null || apiUrl.trim().isEmpty()) {
                 throw new FaceSDKException("API URL must not be null or empty");
             }
-            if (apiKey == null || apiKey.trim().isEmpty()) {
+            if ((apiKey == null || apiKey.trim().isEmpty()) && apiKeys.values().stream().noneMatch(k -> k != null && !k.trim().isEmpty())) {
                 throw new FaceSDKException("API Key must not be null or empty");
             }
             if (maxRetries < 0) {
                 throw new FaceSDKException("Max retries must be non-negative");
+            }
+            if (!Double.isFinite(comparisonThreshold) || comparisonThreshold < 0 || comparisonThreshold > 1 || retryDelay.isNegative()) {
+                throw new FaceSDKException("Invalid comparison threshold or retry delay");
             }
         }
     }

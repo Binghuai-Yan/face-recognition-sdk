@@ -51,3 +51,7 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+test-results/
+results/
+docker-compose/nginx/ssl/*.pem
+docker-compose/nginx/ssl/*.key

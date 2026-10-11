@@ -14,10 +14,9 @@
       <el-table :data="subjects" v-loading="loading" style="width: 100%">
         <el-table-column type="index" width="50" />
         <el-table-column :label="$t('subjects.subjectId')" prop="subject" />
-        <el-table-column :label="$t('subjects.subjectName')" prop="name" />
         <el-table-column :label="$t('subjects.faceCount')">
           <template #default="{ row }">
-            {{ row.faces?.length || 0 }}
+            {{ row.faceCount ?? '—' }}
           </template>
         </el-table-column>
         <el-table-column :label="$t('common.actions')" width="250">
@@ -38,9 +37,6 @@
       <el-form :model="createForm" label-position="top">
         <el-form-item :label="$t('subjects.subjectId')" required>
           <el-input v-model="createForm.subjectId" :placeholder="$t('subjects.subjectId')" />
-        </el-form-item>
-        <el-form-item :label="$t('subjects.subjectName')">
-          <el-input v-model="createForm.name" :placeholder="$t('subjects.subjectName')" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -79,10 +75,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getSubjects, createSubject, deleteSubject, addFace, getFaces } from '@/api/face'
 
+const { t } = useI18n()
 const subjects = ref([])
 const loading = ref(false)
 const showCreateDialog = ref(false)
@@ -92,8 +90,7 @@ const addingFace = ref(false)
 const currentSubjectId = ref('')
 
 const createForm = ref({
-  subjectId: '',
-  name: ''
+  subjectId: ''
 })
 
 const faceImage = ref(null)
@@ -107,10 +104,10 @@ const fetchSubjects = async () => {
     const subjectsWithFaces = await Promise.all(
       res.map(async (subjectId) => {
         try {
-          const faces = await getFaces(subjectId)
-          return { subject: subjectId, name: '', faces: faces || [] }
+          const page = await getFaces(subjectId, 0, 1)
+          return { subject: subjectId, faceCount: page.total_elements }
         } catch (e) {
-          return { subject: subjectId, name: '', faces: [] }
+          return { subject: subjectId, faceCount: null }
         }
       })
     )
@@ -130,10 +127,10 @@ const handleCreate = async () => {
   
   creating.value = true
   try {
-    await createSubject(createForm.value.subjectId, createForm.value.name)
+    await createSubject(createForm.value.subjectId)
     ElMessage.success('Subject created successfully')
     showCreateDialog.value = false
-    createForm.value = { subjectId: '', name: '' }
+    createForm.value = { subjectId: '' }
     fetchSubjects()
   } catch (error) {
     ElMessage.error(error.message || 'Failed to create subject')
@@ -145,17 +142,15 @@ const handleCreate = async () => {
 const handleDelete = async (subjectId) => {
   try {
     await ElMessageBox.confirm(
-      // eslint-disable-next-line no-undef
-      $t('subjects.deleteConfirm'),
-      // eslint-disable-next-line no-undef
-      $t('common.confirm'),
+      t('subjects.deleteConfirm'),
+      t('common.confirm'),
       { type: 'warning' }
     )
     await deleteSubject(subjectId)
     ElMessage.success('Subject deleted successfully')
     fetchSubjects()
   } catch (error) {
-    if (error !== 'cancel') {
+    if (error !== 'cancel' && error !== 'close') {
       ElMessage.error(error.message || 'Failed to delete subject')
     }
   }

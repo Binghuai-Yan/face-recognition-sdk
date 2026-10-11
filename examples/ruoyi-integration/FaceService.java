@@ -12,7 +12,7 @@ import com.facesdk.FaceSDK;
 import com.facesdk.client.FaceSDKClient;
 import com.facesdk.model.*;
 import com.ruoyi.common.core.domain.AjaxResult;
-import com.ruoyi.system.domain.SysUser;
+import com.ruoyi.common.core.domain.entity.SysUser;
 import com.ruoyi.system.service.ISysUserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,7 +23,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.PostConstruct;
 import java.io.IOException;
-import java.util.Base64;
+import com.ruoyi.common.utils.SecurityUtils;
+import javax.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,8 +41,16 @@ public class FaceService {
     @Value("${facesdk.api-url}")
     private String apiUrl;
 
-    @Value("${facesdk.api-key}")
-    private String apiKey;
+    @Value("${facesdk.detection-api-key}")
+    private String detectionApiKey;
+    @Value("${facesdk.recognition-api-key}")
+    private String recognitionApiKey;
+    @Value("${facesdk.verification-api-key}")
+    private String verificationApiKey;
+    @Value("${facesdk.connect-timeout:5000}")
+    private long connectTimeout;
+    @Value("${facesdk.read-timeout:30000}")
+    private long readTimeout;
 
     @Value("${facesdk.similarity-threshold:0.8}")
     private double similarityThreshold;
@@ -57,7 +67,12 @@ public class FaceService {
     public void init() {
         FaceSDK sdk = FaceSDK.builder()
                 .apiUrl(apiUrl)
-                .apiKey(apiKey)
+                .detectionApiKey(detectionApiKey)
+                .recognitionApiKey(recognitionApiKey)
+                .verificationApiKey(verificationApiKey)
+                .comparisonThreshold(similarityThreshold)
+                .connectTimeout(Duration.ofMillis(connectTimeout))
+                .readTimeout(Duration.ofMillis(readTimeout))
                 .build();
         this.faceClient = sdk.getClient();
         logger.info("FaceSDK client initialized");
@@ -72,6 +87,9 @@ public class FaceService {
      * @return 注册结果
      */
     public AjaxResult registerFace(MultipartFile file, String userId, String userName) {
+        requireOwner(userId);
+        SysUser existingUser = userService.selectUserById(Long.valueOf(userId));
+        if (!active(existingUser)) return AjaxResult.error("用户不存在或不可用");
         try {
             // 1. 检测人脸
             byte[] imageData = file.getBytes();
@@ -85,29 +103,12 @@ public class FaceService {
                 return AjaxResult.error("检测到多张人脸，请确保只有一张人脸");
             }
 
-            // 2. 创建或获取人脸库
+            // Adding a face creates the subject automatically.
             String subjectId = "user_" + userId;
-            try {
-                faceClient.createSubject(subjectId, userName);
-            } catch (Exception e) {
-                // Subject 已存在，继续
-                logger.debug("Subject already exists: {}", subjectId);
-            }
 
-            // 3. 添加人脸到人脸库
-            Map<String, Object> metadata = new HashMap<>();
-            metadata.put("userId", userId);
-            metadata.put("userName", userName);
-            metadata.put("registerTime", System.currentTimeMillis());
+            // CompreFace stores the subject and image ID; application metadata needs its own table.
+            FaceRecord faceRecord = faceClient.addFace(subjectId, imageData, null);
 
-            FaceRecord faceRecord = faceClient.addFace(subjectId, imageData, metadata);
-
-            // 4. 更新用户信息（存储特征向量）
-            SysUser user = new SysUser();
-            user.setUserId(Long.valueOf(userId));
-            // 将特征向量转换为 Base64 存储（可选）
-            user.setRemark(faceRecord.getImageId()); // 存储 face ID
-            userService.updateUser(user);
 
             logger.info("Face registered successfully for user: {}", userId);
             return AjaxResult.success("人脸注册成功", faceRecord);
@@ -117,7 +118,7 @@ public class FaceService {
             return AjaxResult.error("图片读取失败");
         } catch (Exception e) {
             logger.error("Face registration failed", e);
-            return AjaxResult.error("人脸注册失败: " + e.getMessage());
+            return AjaxResult.error("人脸注册失败");
         }
     }
 
@@ -133,14 +134,14 @@ public class FaceService {
 
             // 1. 检测人脸
             DetectionResult detectionResult = faceClient.detect(imageData);
-            if (detectionResult.getFaceCount() == 0) {
-                return AjaxResult.error("未检测到人脸");
+            if (detectionResult.getFaceCount() != 1) {
+                return AjaxResult.error("请上传仅包含一张人脸的图片");
             }
 
             // 2. 在人脸库中搜索
             SearchResult searchResult = faceClient.search(imageData, 5, similarityThreshold);
 
-            if (searchResult.getResults() == null || searchResult.getResults().isEmpty()) {
+            if (searchResult.getFaceCount() != 1 || searchResult.getResults() == null || searchResult.getResults().isEmpty()) {
                 return AjaxResult.error("未找到匹配的人脸");
             }
 
@@ -153,30 +154,33 @@ public class FaceService {
 
             // 4. 提取用户ID
             String subjectId = bestMatch.getSubjectId();
-            String userId = subjectId.replace("user_", "");
+            if (subjectId == null || !subjectId.matches("user_[0-9]+")) return AjaxResult.error("身份格式无效");
+            String userId = subjectId.substring(5);
+            requireOwner(userId);
 
             // 5. 查询用户信息
             SysUser user = userService.selectUserById(Long.valueOf(userId));
-            if (user == null) {
-                return AjaxResult.error("用户不存在");
+            if (!active(user)) {
+                return AjaxResult.error("用户不存在或不可用");
             }
 
             logger.info("Face login successful for user: {}", userId);
 
             // 6. 返回登录成功结果（包含用户信息）
             Map<String, Object> result = new HashMap<>();
-            result.put("user", user);
+            result.put("userId", user.getUserId());
+            result.put("userName", user.getUserName());
+            result.put("verified", true);
             result.put("similarity", bestMatch.getSimilarity());
-            result.put("faceId", bestMatch.getFace());
 
-            return AjaxResult.success("登录成功", result);
+            return AjaxResult.success("人脸验证成功", result);
 
         } catch (IOException e) {
             logger.error("Failed to read image file", e);
             return AjaxResult.error("图片读取失败");
         } catch (Exception e) {
             logger.error("Face login failed", e);
-            return AjaxResult.error("人脸登录失败: " + e.getMessage());
+            return AjaxResult.error("人脸登录失败");
         }
     }
 
@@ -207,7 +211,7 @@ public class FaceService {
             return AjaxResult.error("图片读取失败");
         } catch (Exception e) {
             logger.error("Face compare failed", e);
-            return AjaxResult.error("人脸比对失败: " + e.getMessage());
+            return AjaxResult.error("人脸比对失败");
         }
     }
 
@@ -233,7 +237,7 @@ public class FaceService {
             return AjaxResult.error("图片读取失败");
         } catch (Exception e) {
             logger.error("Face detection failed", e);
-            return AjaxResult.error("人脸检测失败: " + e.getMessage());
+            return AjaxResult.error("人脸检测失败");
         }
     }
 
@@ -244,24 +248,20 @@ public class FaceService {
      * @return 删除结果
      */
     public AjaxResult deleteFace(String userId) {
+        requireOwner(userId);
         try {
             String subjectId = "user_" + userId;
 
             // 删除人脸库（会删除该用户所有人脸）
             faceClient.deleteSubject(subjectId);
 
-            // 更新用户信息
-            SysUser user = new SysUser();
-            user.setUserId(Long.valueOf(userId));
-            user.setRemark(null);
-            userService.updateUser(user);
 
             logger.info("Face deleted successfully for user: {}", userId);
             return AjaxResult.success("人脸删除成功");
 
         } catch (Exception e) {
             logger.error("Face deletion failed", e);
-            return AjaxResult.error("人脸删除失败: " + e.getMessage());
+            return AjaxResult.error("人脸删除失败");
         }
     }
 
@@ -272,6 +272,7 @@ public class FaceService {
      * @return 检查结果
      */
     public AjaxResult checkFaceExists(String userId) {
+        requireOwner(userId);
         try {
             String subjectId = "user_" + userId;
 
@@ -284,7 +285,23 @@ public class FaceService {
 
         } catch (Exception e) {
             logger.error("Face check failed", e);
-            return AjaxResult.error("检查失败: " + e.getMessage());
+            return AjaxResult.error("检查失败");
         }
     }
+    private static void requireOwner(String userId) {
+        Long actor = SecurityUtils.getUserId();
+        if (actor == null || !actor.toString().equals(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("只能管理本人绑定的人脸");
+        }
+    }
+
+    private static boolean active(SysUser user) {
+        return user != null && "0".equals(user.getStatus()) && "0".equals(user.getDelFlag());
+    }
+
+    @PreDestroy
+    public void close() {
+        if (faceClient != null) faceClient.close();
+    }
+
 }

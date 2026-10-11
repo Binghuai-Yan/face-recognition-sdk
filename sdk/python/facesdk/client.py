@@ -9,6 +9,7 @@ FaceSDK Python SDK - Synchronous Client
 """
 
 import logging
+import mimetypes
 import time
 from typing import Dict, Any, List, Optional, Union, BinaryIO
 from pathlib import Path
@@ -16,6 +17,7 @@ from pathlib import Path
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from ._common import service_for, retryable, validate_search, encode_embedding, path_segment, result_array
 
 from .exceptions import (
     FaceSDKException,
@@ -24,6 +26,7 @@ from .exceptions import (
     AuthenticationException,
     RateLimitException,
     ServerException,
+    ValidationException,
 )
 from .models import (
     DetectionResult,
@@ -42,12 +45,14 @@ class FaceSDKClient:
     def __init__(
         self,
         api_url: str,
-        api_key: str,
+        api_key: str = "",
         timeout: int = 30,
         connect_timeout: int = 5,
         max_retries: int = 3,
         retry_delay: float = 0.5,
         verify_ssl: bool = True,
+        api_keys: Optional[Dict[str, str]] = None,
+        comparison_threshold: float = 0.8,
     ):
         """
         初始化 FaceSDK 客户端
@@ -68,6 +73,10 @@ class FaceSDKClient:
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.verify_ssl = verify_ssl
+        self.api_keys = dict(api_keys or {})
+        self.comparison_threshold = comparison_threshold
+        if not isinstance(max_retries, int) or isinstance(max_retries, bool) or max_retries < 0 or retry_delay < 0 or not 0 <= comparison_threshold <= 1:
+            raise ValueError("Invalid retry configuration or comparison threshold")
 
         # 创建会话
         self.session = requests.Session()
@@ -78,7 +87,7 @@ class FaceSDKClient:
 
         # 配置重试策略
         retry_strategy = Retry(
-            total=max_retries,
+            total=0,
             backoff_factor=retry_delay,
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],
@@ -100,25 +109,43 @@ class FaceSDKClient:
         kwargs.setdefault("timeout", self._timeout)
         kwargs.setdefault("verify", self.verify_ssl)
 
-        try:
-            response = self.session.request(method, url, **kwargs)
-            return self._handle_response(response)
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Request failed: {e}")
-            raise ApiException(f"Request failed: {str(e)}")
+        headers = dict(kwargs.pop("headers", {}))
+        key = self.api_keys.get(service_for(endpoint), self.api_key)
+        if not key:
+            raise AuthenticationException("Missing API key for " + service_for(endpoint))
+        headers["x-api-key"] = key
+        attempts = self.max_retries if retryable(method, endpoint) else 0
+        for attempt in range(attempts + 1):
+            try:
+                response = self.session.request(method, url, headers=headers, **kwargs)
+                try:
+                    if response.status_code in (429, 500, 502, 503, 504) and attempt < attempts:
+                        time.sleep(self.retry_delay * 2 ** attempt)
+                        continue
+                    return self._handle_response(response)
+                finally:
+                    response.close()
+            except requests.exceptions.RequestException as e:
+                if attempt == attempts:
+                    raise ApiException("Request failed: " + str(e)) from e
+                time.sleep(self.retry_delay * 2 ** attempt)
 
     def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
         """处理 HTTP 响应"""
         try:
             data = response.json() if response.content else {}
-        except ValueError:
+        except ValueError as e:
+            if 200 <= response.status_code < 300:
+                raise ApiException("API returned invalid JSON", "INVALID_RESPONSE") from e
             data = {}
 
-        if response.status_code in (200, 201):
+        if 200 <= response.status_code < 300:
+            if not isinstance(data, dict):
+                raise ApiException("API returned invalid JSON object", "INVALID_RESPONSE")
             return data
 
         # 处理错误
-        message = data.get("message") or data.get("error") or "Unknown error"
+        message = str(data.get("message") or data.get("error") or "Unknown error") if isinstance(data, dict) else "Unknown error"
 
         if response.status_code == 400:
             if "no face" in message.lower():
@@ -144,14 +171,14 @@ class FaceSDKClient:
             return {
                 field_name: (
                     file_path.name,
-                    open(file_path, "rb"),
-                    f"image/{file_path.suffix.lstrip('.')}",
+                    file_path.read_bytes(),
+                    mimetypes.guess_type(file_path.name)[0] or "application/octet-stream",
                 )
             }
         elif isinstance(file, bytes):
             return {field_name: ("image.jpg", file, "image/jpeg")}
         elif hasattr(file, "read"):
-            return {field_name: ("image.jpg", file, "image/jpeg")}
+            return {field_name: ("image.jpg", file.read(), "image/jpeg")}
         else:
             raise ValueError(f"Unsupported file type: {type(file)}")
 
@@ -175,13 +202,13 @@ class FaceSDKClient:
         logger.debug(f"Detecting faces in image")
 
         files = self._prepare_file(image)
-        data = {k: str(v) for k, v in options.items()}
+        data = {k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in options.items()}
 
         result = self._request(
             "POST",
             "/api/v1/detection/detect",
             files=files,
-            data=data,
+            params=data,
         )
         return DetectionResult.from_dict(result)
 
@@ -205,15 +232,15 @@ class FaceSDKClient:
         logger.debug("Comparing two images")
 
         files = {}
-        files.update(self._prepare_file(image1, "file1"))
-        files.update(self._prepare_file(image2, "file2"))
+        files.update(self._prepare_file(image1, "source_image"))
+        files.update(self._prepare_file(image2, "target_image"))
 
         result = self._request(
             "POST",
-            "/api/v1/recognition/compare",
+            "/api/v1/verification/verify",
             files=files,
         )
-        return CompareResult.from_dict(result)
+        return CompareResult.from_dict(result, self.comparison_threshold)
 
     # ==================== 人脸识别（1:N） ====================
 
@@ -235,19 +262,18 @@ class FaceSDKClient:
             SearchResult: 搜索结果
         """
         logger.debug(f"Searching faces with limit={limit}")
+        validate_search(limit, threshold)
 
         files = self._prepare_file(image)
-        data = {"limit": str(limit)}
-        if threshold is not None:
-            data["threshold"] = str(threshold)
+        data = {"prediction_count": str(limit)}
 
         result = self._request(
             "POST",
             "/api/v1/recognition/recognize",
             files=files,
-            data=data,
+            params=data,
         )
-        return SearchResult.from_dict(result)
+        return SearchResult.from_dict(result, threshold)
 
     # ==================== 特征提取 ====================
 
@@ -270,10 +296,11 @@ class FaceSDKClient:
 
         result = self._request(
             "POST",
-            "/api/v1/recognition/face",
+            "/api/v1/detection/detect",
             files=files,
+            params={"face_plugins": "calculator"},
         )
-        return result.get("embedding", "")
+        return encode_embedding(result)
 
     # ==================== 人脸库管理 ====================
 
@@ -293,7 +320,7 @@ class FaceSDKClient:
         result = self._request(
             "POST",
             "/api/v1/recognition/subjects",
-            json={"subject": subject_id, "name": name},
+            json={"subject": subject_id},
         )
         return Subject.from_dict(result)
 
@@ -305,7 +332,7 @@ class FaceSDKClient:
             subject_id: 人脸库 ID
         """
         logger.debug(f"Deleting subject: {subject_id}")
-        self._request("DELETE", f"/api/v1/recognition/subjects/{subject_id}")
+        self._request("DELETE", f"/api/v1/recognition/subjects/{path_segment(subject_id)}")
 
     def list_subjects(self) -> List[Subject]:
         """
@@ -316,11 +343,7 @@ class FaceSDKClient:
         """
         logger.debug("Listing all subjects")
         result = self._request("GET", "/api/v1/recognition/subjects")
-        subjects = result.get("subjects", [])
-        # CompreFace 返回字符串列表
-        if subjects and isinstance(subjects[0], str):
-            return [Subject(subject_id=s) for s in subjects]
-        return [Subject.from_dict(s) for s in subjects]
+        return [Subject.from_dict(s) for s in result_array(result, key="subjects")]
 
     # ==================== 人脸管理 ====================
 
@@ -342,19 +365,15 @@ class FaceSDKClient:
             FaceRecord: 人脸记录
         """
         logger.debug(f"Adding face to subject: {subject_id}")
+        if metadata:
+            raise ValidationException("CompreFace 1.2 does not persist metadata; store it in your application")
 
         files = self._prepare_file(image)
-        data = {}
-        if metadata:
-            import json
-            data["metadata"] = json.dumps(metadata)
-
         result = self._request(
             "POST",
             f"/api/v1/recognition/faces",
             params={"subject": subject_id},
             files=files,
-            data=data,
         )
         return FaceRecord.from_dict(result)
 
@@ -366,7 +385,7 @@ class FaceSDKClient:
             face_id: 人脸 ID
         """
         logger.debug(f"Deleting face: {face_id}")
-        self._request("DELETE", f"/api/v1/recognition/faces/{face_id}")
+        self._request("DELETE", f"/api/v1/recognition/faces/{path_segment(face_id)}")
 
     def close(self):
         """关闭客户端"""

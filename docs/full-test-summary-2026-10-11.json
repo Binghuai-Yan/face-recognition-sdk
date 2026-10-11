@@ -1,0 +1,412 @@
+{
+  "date": "2026-10-11",
+  "generated_at": "2026-10-11T23:11:06.520117+08:00",
+  "review_baseline": "56e979f",
+  "scope": "CPU real-model functionality, protocols, packaging, deployment, persistence, fault recovery and bounded load",
+  "environment": {
+    "host": "Windows / Docker Desktop",
+    "linux": "Ubuntu 24.04 WSL2",
+    "kubernetes": "kind / Kubernetes 1.31.0",
+    "compreface": "1.2.0",
+    "compreface_amd64_manifest": "sha256:0a36c8d2f089a0166c282a9ddbb61c2c845574c27e2586cc422a3a5cdf71c5ac"
+  },
+  "repository_checks": {
+    "checks": [
+      {
+        "check": "python-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.56
+      },
+      {
+        "check": "python-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.17
+      },
+      {
+        "check": "python-package",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 3.39
+      },
+      {
+        "check": "fresh-venv",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 3.91
+      },
+      {
+        "check": "fresh-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 5.92
+      },
+      {
+        "check": "fresh-import",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.17
+      },
+      {
+        "check": "fresh-dependencies",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.77
+      },
+      {
+        "check": "java-verify-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 7.62
+      },
+      {
+        "check": "ruoyi-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 8.27
+      },
+      {
+        "check": "go-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.81
+      },
+      {
+        "check": "go-vet",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.41
+      },
+      {
+        "check": "node-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.34
+      },
+      {
+        "check": "node-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.48
+      },
+      {
+        "check": "node-lint",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.73
+      },
+      {
+        "check": "node-types",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.47
+      },
+      {
+        "check": "node-package",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.83
+      },
+      {
+        "check": "node-production-audit",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 2.59
+      },
+      {
+        "check": "web-install",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 22.75
+      },
+      {
+        "check": "web-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 4.38
+      },
+      {
+        "check": "web-lint",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.84
+      },
+      {
+        "check": "web-build",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 10.09
+      },
+      {
+        "check": "web-production-audit",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.77
+      },
+      {
+        "check": "compose-config",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.08
+      },
+      {
+        "check": "compose-test-config",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.09
+      },
+      {
+        "check": "kustomize",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.09
+      },
+      {
+        "check": "kubernetes-schema",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 0.59
+      },
+      {
+        "check": "live-tests",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 23.94
+      },
+      {
+        "check": "node-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.25
+      },
+      {
+        "check": "go-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.38
+      },
+      {
+        "check": "java-live",
+        "exit_code": 0,
+        "status": "passed",
+        "seconds": 1.95
+      }
+    ],
+    "live_requested": true,
+    "race_requested": false,
+    "production_audit_requested": true
+  },
+  "go_race_wsl": "passed",
+  "unit_tests": {
+    "python_sdk_and_config": 26,
+    "java_sdk": 10,
+    "ruoyi_example": 6,
+    "go_top_level": 5,
+    "go_subcases": 7,
+    "node_sdk": 11,
+    "web_unit": 6,
+    "web_actual_xhr": 2
+  },
+  "npm_production_audit": {
+    "node_sdk": "passed",
+    "web": "passed",
+    "known_vulnerabilities_after_fix": 0,
+    "web_known_vulnerabilities_before_fix": 9,
+    "registry": "https://registry.npmjs.org"
+  },
+  "real_model_deployments": {
+    "compose-external": {
+      "checks": [
+        {
+          "check": "python",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 23.67
+        },
+        {
+          "check": "node",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.25
+        },
+        {
+          "check": "go",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.38
+        },
+        {
+          "check": "java",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 2.41
+        }
+      ],
+      "python_live_cases": 12,
+      "real_model_lifecycle": "passed",
+      "feature_reference_sha256": "passed",
+      "original_keys_subject_face_and_recognition_after_recreation": "passed"
+    },
+    "compose-internal": {
+      "checks": [
+        {
+          "check": "python",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 24.11
+        },
+        {
+          "check": "node",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.38
+        },
+        {
+          "check": "go",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.42
+        },
+        {
+          "check": "java",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.95
+        }
+      ],
+      "python_live_cases": 12,
+      "real_model_lifecycle": "passed",
+      "feature_reference_sha256": "passed",
+      "original_keys_subject_face_and_recognition_after_recreation": "passed"
+    },
+    "kubernetes": {
+      "checks": [
+        {
+          "check": "python",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 38.91
+        },
+        {
+          "check": "node",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.38
+        },
+        {
+          "check": "go",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 1.67
+        },
+        {
+          "check": "java",
+          "exit_code": 0,
+          "status": "passed",
+          "seconds": 2.09
+        }
+      ],
+      "python_live_cases": 12,
+      "real_model_lifecycle": "passed",
+      "feature_reference_sha256": "passed",
+      "original_keys_subject_face_and_recognition_after_recreation": "passed"
+    }
+  },
+  "runtime_services": {
+    "alertmanager-config": "passed",
+    "prometheus-config": "passed",
+    "go-race-wsl": "passed",
+    "postgres-backup-restore": "passed",
+    "postgres-force-recreate": "passed",
+    "redis-authentication": "passed",
+    "grafana-provisioning": "passed",
+    "prometheus-postgres-scrape": "passed",
+    "real-api-core-database-health": "passed",
+    "gateway-tls-verified-certificate": "passed",
+    "gateway-http-redirect": "passed",
+    "gateway-real-rate-limit": "passed",
+    "prometheus-real-database-and-api-probes": "passed",
+    "grafana-datasource-and-dashboard": "passed",
+    "alertmanager-real-readiness": "passed",
+    "redis-rejects-anonymous-and-accepts-authenticated": "passed"
+  },
+  "monitoring_fault_recovery": {
+    "prometheus-alertmanager-firing": "passed",
+    "prometheus-alertmanager-resolved": "passed"
+  },
+  "postgres_backup_restore": {
+    "compose": "passed",
+    "kubernetes": "passed",
+    "validation": [
+      "all public table row counts",
+      "canary",
+      "uuid-ossp"
+    ],
+    "restore_databases_removed": true
+  },
+  "standalone_postgres_data_directory": "/var/lib/postgresql/data",
+  "kubernetes_database_recovery": {
+    "readiness_false_during_database_outage": "passed",
+    "readiness_true_after_recovery": "passed",
+    "same_api_pod_without_liveness_restart": "passed",
+    "persistent_subject_face_and_recognition": "passed",
+    "database_outage_seconds": 122.47,
+    "api_restart_count_before": 0,
+    "api_restart_count_after": 0
+  },
+  "kubernetes_ingress": {
+    "trusted_tls_sni_api_hostname": "passed",
+    "trusted_tls_sni_ui_hostname": "passed",
+    "real_detection_through_ingress": "passed",
+    "http_to_https_redirect": "passed"
+  },
+  "kubernetes_api_pod_recreation_and_persistent_face": "passed",
+  "load": {
+    "python_detection_verification": {
+      "requests": 20,
+      "concurrency": 2,
+      "failures": 0,
+      "seconds": 23.957,
+      "requests_per_second": 0.835,
+      "latency_mean_ms": 2297.67,
+      "latency_max_ms": 2478.82
+    },
+    "wrk_detection": {
+      "threads": 2,
+      "connections": 2,
+      "duration_seconds": 20.03,
+      "requests": 208,
+      "http_200": 208,
+      "socket_errors": 0,
+      "requests_per_second": 10.39,
+      "latency_mean_ms": 191.15,
+      "latency_p90_ms": 216.21,
+      "latency_p99_ms": 231.92
+    },
+    "jmeter_detection_verification": {
+      "requests": 6,
+      "http_200": 6,
+      "errors": 0
+    }
+  },
+  "not_covered": [
+    {
+      "area": "optional MinIO storage profile",
+      "reason": "Pinned image unavailable through attempted registries/mirrors; storage configuration validated only"
+    },
+    {
+      "area": "browser GUI and browser compatibility",
+      "reason": "No available browser UI automation connection; component tests and actual jsdom XHR passed"
+    },
+    {
+      "area": "complete RuoYi host JWT/filter chain/method security",
+      "reason": "Host application is outside this repository"
+    },
+    {
+      "area": "population accuracy, long soak, maximum capacity, GPU, multi-node HA and production storage disaster recovery",
+      "reason": "Tests use CPU, an official single-face fixture and isolated single-node infrastructure"
+    }
+  ],
+  "credentials_private_keys_photos_database_dumps_and_image_caches_uploaded": false
+}

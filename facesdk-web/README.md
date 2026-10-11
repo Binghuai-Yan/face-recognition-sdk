@@ -1,83 +1,16 @@
-# FaceSDK Web 管理界面
+# Vue 管理界面
 
-基于 Vue 3 + Element Plus 的人脸识别管理界面，支持中英文切换。
+Node.js 18+，Vue 3 / Element Plus，支持中英切换。此界面独立于 CompreFace 镜像自带管理界面。
 
-## 功能特性
-
-- 🎯 **人脸检测** - 上传图片检测人脸位置和特征
-- 🔍 **人脸比对** - 比对两张人脸图片的相似度
-- 🔎 **人脸搜索** - 在人脸库中搜索相似人脸
-- 📁 **人脸库管理** - 创建/删除人脸库，添加/删除人脸
-- 🌐 **中英文切换** - 完整的国际化支持
-- ⚙️ **系统设置** - 配置 API 地址和密钥
-
-## 技术栈
-
-- Vue 3 (Composition API)
-- Vue Router 4
-- Vue I18n 9
-- Element Plus
-- Axios
-
-## 安装运行
-
-```bash
-# 安装依赖
-npm install
-
-# 开发模式运行
+```sh
+npm ci
 npm run serve
-
-# 生产构建
-npm run build
 ```
 
-## 配置
+开发服务为 `http://localhost:8080`，`/api` 代理到 `http://localhost:8000`。先使用 CompreFace 自带 UI 创建三种服务，在此界面设置 Detection、Recognition、Verification 密钥。
 
-在设置页面配置：
-- API 地址：默认 `http://localhost:8000`
-- API 密钥：您的 CompreFace API Key
+密钥保存于当前浏览器 localStorage，本界面适用于可信操作者。面向普通用户发布时应由应用后端代理 API 并实现用户权限。生产构建为 `npm run build`，需在入口服务器将 `/api` 转发至 CompreFace。
 
-## 项目结构
+功能包含检测、比对、按阈值搜索、Subject 创建/删除/添加人脸。搜索数量是每张脸候选身份数；人脸库数量使用后端 total_elements，避免分页低估。不提供后端不支持的质量插件或独立活体检测，也不保存单独 Subject 显示名称。
 
-```
-src/
-├── api/              # API 接口
-├── components/       # 组件
-│   ├── AppHeader.vue # 顶部导航（含语言切换）
-│   └── AppLayout.vue # 布局组件
-├── locales/          # 国际化文件
-│   ├── zh.json       # 中文
-│   └── en.json       # 英文
-├── router/           # 路由配置
-├── views/            # 页面视图
-│   ├── HomeView.vue
-│   ├── DetectView.vue
-│   ├── CompareView.vue
-│   ├── SearchView.vue
-│   ├── SubjectsView.vue
-│   └── SettingsView.vue
-├── App.vue
-├── i18n.js           # i18n 配置
-└── main.js           # 入口文件
-```
-
-## 国际化
-
-语言切换器位于顶部导航栏右侧，支持：
-- 简体中文
-- English
-
-语言设置会自动保存到 localStorage。
-
-## 开发说明
-
-### 添加新语言
-
-1. 在 `src/locales/` 下创建新的 JSON 文件
-2. 在 `src/i18n.js` 中导入并添加到 messages
-3. 在 `AppHeader.vue` 的语言下拉菜单中添加选项
-
-### API 接口
-
-所有 API 调用通过 `src/api/face.js` 统一管理，自动读取 localStorage 中的 API Key。
+验证：`npm test`、`npm run lint -- --no-fix`、`npm run build`。协议详见 [文档](../docs/protocol.md)。

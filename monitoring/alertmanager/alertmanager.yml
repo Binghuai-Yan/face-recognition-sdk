@@ -1,0 +1,9 @@
+route:
+  receiver: local
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+receivers:
+  - name: local
+# Configure a receiver explicitly to deliver email or webhook notifications.

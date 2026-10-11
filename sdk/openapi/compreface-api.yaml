@@ -1,46 +1,34 @@
-# File: facesdk/sdk/openapi/compreface-api.yaml
-# Copyright (c) 2024 FaceSDK Contributors
-# MIT License
-#
-# FaceSDK OpenAPI 3.0 Specification
-# Based on CompreFace API
-
 openapi: 3.0.3
 info:
-  title: FaceSDK API
-  description: |
-    FaceSDK 提供完整的人脸识别 REST API，基于 CompreFace 引擎。
-    
-    功能包括：
-    - 人脸检测
-    - 人脸比对（1:1）
-    - 人脸识别（1:N）
-    - 人脸库管理
-    - 人脸管理
-  version: 1.0.0
-  contact:
-    name: FaceSDK Team
-    email: team@facesdk.io
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-
+  title: CompreFace 1.2 — FaceSDK supported endpoints
+  version: 1.2.0
+  description: Wire protocol for the endpoints used by this repository; not the full
+    CompreFace administration API. SDK faces/results/is_match/threshold are client
+    normalization fields. Feature extraction uses detection with face_plugins=calculator;
+    similarity thresholds are applied by clients. CompreFace persists neither separate
+    subject names nor arbitrary metadata.
 servers:
-  - url: http://localhost:8000
-    description: 本地开发服务器
-  - url: https://api.facesdk.io
-    description: 生产服务器
-
+- url: http://localhost:8000
 security:
-  - ApiKeyAuth: []
-
+- ServiceKey: []
 paths:
   /api/v1/detection/detect:
     post:
-      summary: 人脸检测
-      description: 检测图片中的人脸，返回人脸位置、置信度和质量评分
-      tags:
-        - Detection
+      summary: Detect faces
+      description: Requires a Detection service API key.
+      responses:
+        '200':
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detection'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       requestBody:
         required: true
         content:
@@ -51,33 +39,53 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: 图片文件（JPG、PNG）
-                limit:
-                  type: integer
-                  default: 1
-                  description: 最多返回的人脸数量
-                det_prob_threshold:
-                  type: number
-                  default: 0.8
-                  description: 检测置信度阈值
+              required:
+              - file
+      parameters:
+      - &id001
+        name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Maximum detected faces; zero means no limit.
+      - &id002
+        name: det_prob_threshold
+        in: query
+        required: false
+        schema:
+          type: number
+      - &id003
+        name: face_plugins
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Comma-separated age, gender, pose, landmarks, calculator or mask;
+          availability depends on the model.
+      - &id004
+        name: status
+        in: query
+        required: false
+        schema:
+          type: boolean
+  /api/v1/verification/verify:
+    post:
+      summary: Compare source against target faces
+      description: Requires a Verification service API key.
       responses:
         '200':
-          description: 检测成功
+          description: Successful CompreFace response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DetectionResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
-  /api/v1/recognition/compare:
-    post:
-      summary: 人脸比对
-      description: 比对两张人脸图片，返回相似度
-      tags:
-        - Recognition
+                $ref: '#/components/schemas/Verification'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       requestBody:
         required: true
         content:
@@ -85,32 +93,37 @@ paths:
             schema:
               type: object
               properties:
-                file1:
+                source_image:
                   type: string
                   format: binary
-                  description: 第一张图片
-                file2:
+                target_image:
                   type: string
                   format: binary
-                  description: 第二张图片
-      responses:
-        '200':
-          description: 比对成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CompareResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
+              required:
+              - source_image
+              - target_image
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+      - *id004
   /api/v1/recognition/recognize:
     post:
-      summary: 人脸识别（1:N）
-      description: 在人脸库中搜索相似人脸
-      tags:
-        - Recognition
+      summary: Find subject candidates per detected face
+      description: Requires a Recognition service API key.
+      responses:
+        '200':
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Recognition'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       requestBody:
         required: true
         content:
@@ -121,104 +134,100 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: 待搜索图片
-                limit:
-                  type: integer
-                  default: 1
-                  description: 返回结果数量
-                threshold:
-                  type: number
-                  default: 0.0
-                  description: 相似度阈值
-      responses:
-        '200':
-          description: 识别成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SearchResult'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-
+              required:
+              - file
+      parameters:
+      - *id001
+      - *id002
+      - *id003
+      - *id004
+      - name: prediction_count
+        in: query
+        required: false
+        schema:
+          type: integer
+        description: Maximum subject predictions per face; default 1.
   /api/v1/recognition/subjects:
     get:
-      summary: 列出所有人脸库
-      description: 获取所有人脸库列表
-      tags:
-        - Subjects
+      summary: List subject names
+      description: Requires a Recognition service API key.
       responses:
         '200':
-          description: 查询成功
+          description: Successful CompreFace response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  subjects:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Subject'
+                $ref: '#/components/schemas/Subjects'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     post:
-      summary: 创建人脸库
-      description: 创建新的人脸库
-      tags:
-        - Subjects
+      summary: Create a subject
+      description: Requires a Recognition service API key.
+      responses:
+        '200': &id005
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subject'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201': *id005
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                subject:
-                  type: string
-                  description: 人脸库 ID
-                name:
-                  type: string
-                  description: 人脸库名称
-              required:
-                - subject
+              $ref: '#/components/schemas/Subject'
+  /api/v1/recognition/subjects/{subject}:
+    delete:
+      summary: Delete a subject and its examples
+      description: Requires a Recognition service API key.
       responses:
         '200':
-          description: 创建成功
+          description: Successful CompreFace response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Subject'
-
-  /api/v1/recognition/subjects/{subject}:
-    delete:
-      summary: 删除人脸库
-      description: 删除指定人脸库及其所有人脸
-      tags:
-        - Subjects
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
       parameters:
-        - name: subject
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 删除成功
-        '404':
-          $ref: '#/components/responses/NotFound'
-
+      - name: subject
+        in: path
+        required: true
+        schema:
+          type: string
   /api/v1/recognition/faces:
     post:
-      summary: 添加人脸
-      description: 添加人脸图片到指定人脸库
-      tags:
-        - Faces
-      parameters:
-        - name: subject
-          in: query
-          required: true
-          schema:
-            type: string
-          description: 人脸库 ID
+      summary: Add a face example; creates subject if needed
+      description: Requires a Recognition service API key.
+      responses:
+        '200': &id006
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceRecord'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201': *id006
       requestBody:
         required: true
         content:
@@ -229,64 +238,96 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: 人脸图片
-                metadata:
-                  type: string
-                  description: JSON 格式的元数据
+              required:
+              - file
+      parameters:
+      - name: subject
+        in: query
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Page through face examples
+      description: Requires a Recognition service API key.
       responses:
         '200':
-          description: 添加成功
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FacePage'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: subject
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+  /api/v1/recognition/faces/{image_id}:
+    delete:
+      summary: Delete a face example
+      description: Requires a Recognition service API key.
+      responses:
+        '200':
+          description: Successful CompreFace response
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FaceRecord'
-
-  /api/v1/recognition/faces/{face_id}:
-    delete:
-      summary: 删除人脸
-      description: 删除指定人脸
-      tags:
-        - Faces
-      parameters:
-        - name: face_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 删除成功
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /health:
-    get:
-      summary: 健康检查
-      description: 检查服务健康状态
-      tags:
-        - System
-      security: []
-      responses:
-        '200':
-          description: 服务正常
+        default:
+          description: Successful CompreFace response
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "UP"
-
+                $ref: '#/components/schemas/Error'
+      parameters:
+      - name: image_id
+        in: path
+        required: true
+        schema:
+          type: string
+  /api/v1/consistence/status:
+    get:
+      summary: Check API, database and core consistency
+      security: []
+      responses:
+        '200':
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+        default:
+          description: Successful CompreFace response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   securitySchemes:
-    ApiKeyAuth:
+    ServiceKey:
       type: apiKey
       in: header
       name: x-api-key
-
+      description: Create separate Detection, Recognition and Verification services
+        in the UI and use the matching key.
   schemas:
-    BoundingBox:
+    Box:
       type: object
       properties:
         x_min:
@@ -297,145 +338,169 @@ components:
           type: integer
         y_max:
           type: integer
-
-    Quality:
-      type: object
-      properties:
-        score:
+        probability: &id008
           type: number
-        brightness:
-          type: number
-        sharpness:
-          type: number
-
+          minimum: 0
+          maximum: 1
     Face:
       type: object
       properties:
         box:
-          $ref: '#/components/schemas/BoundingBox'
+          $ref: '#/components/schemas/Box'
         landmarks:
           type: array
           items:
             type: array
-            items:
-              type: integer
-        confidence:
-          type: number
-        quality:
-          $ref: '#/components/schemas/Quality'
-
-    DetectionResult:
+            items: &id007
+              type: number
+        embedding:
+          type: array
+          items: *id007
+        age:
+          type: object
+          properties:
+            low: *id007
+            high: *id007
+            probability: *id007
+        gender:
+          type: object
+          properties:
+            value:
+              type: string
+            probability: *id007
+        pose:
+          type: object
+          properties:
+            pitch: *id007
+            yaw: *id007
+            roll: *id007
+      required:
+      - box
+    Detection:
       type: object
       properties:
-        faces:
+        result:
           type: array
           items:
             $ref: '#/components/schemas/Face'
-        image_id:
-          type: string
-        face_count:
-          type: integer
-
-    CompareResult:
-      type: object
-      properties:
-        similarity:
-          type: number
-        distance:
-          type: number
-        threshold:
-          type: number
-        is_match:
-          type: boolean
-        face1:
-          $ref: '#/components/schemas/Face'
-        face2:
-          $ref: '#/components/schemas/Face'
-
-    MatchResult:
+      required:
+      - result
+    Candidate:
       type: object
       properties:
         subject:
           type: string
-        similarity:
-          type: number
-        distance:
-          type: number
-        is_match:
-          type: boolean
-        face:
-          $ref: '#/components/schemas/Face'
-
-    SearchResult:
+        similarity: *id008
+      required:
+      - subject
+      - similarity
+    RecognitionFace:
+      allOf:
+      - $ref: '#/components/schemas/Face'
+      - type: object
+        properties:
+          subjects:
+            type: array
+            items:
+              $ref: '#/components/schemas/Candidate'
+        required:
+        - subjects
+    Recognition:
       type: object
       properties:
-        results:
+        result:
           type: array
           items:
-            $ref: '#/components/schemas/MatchResult'
-        face_count:
-          type: integer
-        image_id:
-          type: string
-
+            $ref: '#/components/schemas/RecognitionFace'
+      required:
+      - result
+    VerificationFace:
+      allOf:
+      - $ref: '#/components/schemas/Face'
+      - type: object
+        properties:
+          similarity: *id008
+        required:
+        - similarity
+    Verification:
+      type: object
+      properties:
+        result:
+          type: array
+          items:
+            type: object
+            properties:
+              source_image_face:
+                $ref: '#/components/schemas/Face'
+              face_matches:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VerificationFace'
+            required:
+            - source_image_face
+            - face_matches
+      required:
+      - result
     Subject:
       type: object
       properties:
         subject:
           type: string
-        name:
-          type: string
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-
+      required:
+      - subject
+    Subjects:
+      type: object
+      properties:
+        subjects:
+          type: array
+          items:
+            type: string
+      required:
+      - subjects
     FaceRecord:
       type: object
       properties:
         image_id:
           type: string
+          format: uuid
         subject:
           type: string
-        created_at:
+      required:
+      - image_id
+      - subject
+    FacePage:
+      type: object
+      properties:
+        faces:
+          type: array
+          items:
+            $ref: '#/components/schemas/FaceRecord'
+        page_number:
+          type: integer
+          minimum: 0
+        page_size:
+          type: integer
+          minimum: 0
+        total_pages:
+          type: integer
+          minimum: 0
+        total_elements:
+          type: integer
+          minimum: 0
+      required:
+      - faces
+      - total_elements
+    Health:
+      type: object
+      properties:
+        status:
           type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-        metadata:
-          type: object
-
+      required:
+      - status
     Error:
       type: object
       properties:
         message:
           type: string
-        error:
-          type: string
         code:
-          type: string
-
-  responses:
-    BadRequest:
-      description: 请求参数错误
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-
-    Unauthorized:
-      description: 认证失败
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
-
-    NotFound:
-      description: 资源不存在
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
+          type: integer

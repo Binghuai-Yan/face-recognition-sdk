@@ -54,14 +54,6 @@
           />
         </el-form-item>
         
-        <el-form-item label="Anti-spoofing API Key">
-          <el-input 
-            v-model="form.antispoofingApiKey" 
-            type="password" 
-            show-password
-            placeholder="Anti-spoofing（RGB 活体检测）服务 API Key"
-          />
-        </el-form-item>
         
         <el-form-item>
           <el-button type="primary" @click="handleSave" style="width: 100%">
@@ -84,8 +76,7 @@ const form = reactive({
   language: localStorage.getItem('locale') || 'zh',
   detectionApiKey: localStorage.getItem('apiKey_detection') || '',
   recognitionApiKey: localStorage.getItem('apiKey_recognition') || '',
-  verificationApiKey: localStorage.getItem('apiKey_verification') || '',
-  antispoofingApiKey: localStorage.getItem('apiKey_antispoofing') || ''
+  verificationApiKey: localStorage.getItem('apiKey_verification') || ''
 })
 
 const handleLanguageChange = (lang) => {
@@ -99,7 +90,6 @@ const handleSave = () => {
   localStorage.setItem('apiKey_detection', form.detectionApiKey)
   localStorage.setItem('apiKey_recognition', form.recognitionApiKey)
   localStorage.setItem('apiKey_verification', form.verificationApiKey)
-  localStorage.setItem('apiKey_antispoofing', form.antispoofingApiKey)
   ElMessage.success('Settings saved')
 }
 </script>

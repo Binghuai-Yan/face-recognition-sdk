@@ -1,0 +1,11 @@
+{
+  "detection": {"result": [{"box": {"probability": 0.99, "x_min": 10, "y_min": 20, "x_max": 110, "y_max": 120}, "landmarks": [[10, 20], [30, 40]], "embedding": [1.0, -2.0, 0.5]}]},
+  "verification": {"result": [{"source_image_face": {"box": {"probability": 0.99, "x_min": 10}}, "face_matches": [{"box": {"probability": 0.98, "x_min": 12}, "similarity": 0.8}]}]},
+  "recognition": {"result": [{"box": {"probability": 0.99}, "subjects": [{"subject": "below", "similarity": 0.79}, {"subject": "boundary", "similarity": 0.8}, {"subject": "best", "similarity": 0.96}]}]},
+  "subjects": {"subjects": ["alice", "张三 /?&"]},
+  "created": {"subject": "张三 /?&"},
+  "added": {"image_id": "f8d66aee-7a82-47b9-8c8d-ff9a4a3b8523", "subject": "张三 /?&"},
+  "empty": {"result": []},
+  "error": {"message": "temporary failure"},
+  "embedding_base64": "AACAPwAAAMAAAAA/"
+}

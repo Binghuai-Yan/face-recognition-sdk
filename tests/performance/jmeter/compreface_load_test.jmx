@@ -20,14 +20,19 @@
             <stringProp name="Argument.value">${__P(api_url,http://localhost:8000)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
-          <elementProp name="api_key" elementType="Argument">
-            <stringProp name="Argument.name">api_key</stringProp>
-            <stringProp name="Argument.value">${__P(api_key,your-api-key)}</stringProp>
+          <elementProp name="detection_api_key" elementType="Argument">
+            <stringProp name="Argument.name">detection_api_key</stringProp>
+            <stringProp name="Argument.value">${__P(detection_api_key,)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="test_image_path" elementType="Argument">
             <stringProp name="Argument.name">test_image_path</stringProp>
             <stringProp name="Argument.value">${__P(test_image_path,test_images/face.jpg)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="verification_api_key" elementType="Argument">
+            <stringProp name="Argument.name">verification_api_key</stringProp>
+            <stringProp name="Argument.value">${__P(verification_api_key,)}</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
         </collectionProp>
@@ -40,10 +45,10 @@
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
           <boolProp name="LoopController.continue_forever">false</boolProp>
-          <stringProp name="LoopController.loops">100</stringProp>
+          <stringProp name="LoopController.loops">${__P(loops,100)}</stringProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">10</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">30</stringProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(detection_threads,10)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(ramp_seconds,30)}</stringProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
         <stringProp name="ThreadGroup.duration"></stringProp>
         <stringProp name="ThreadGroup.delay"></stringProp>
@@ -82,7 +87,7 @@
             <collectionProp name="HeaderManager.headers">
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">x-api-key</stringProp>
-                <stringProp name="Header.value">${api_key}</stringProp>
+                <stringProp name="Header.value">${detection_api_key}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>
@@ -105,10 +110,10 @@
         <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
         <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller" enabled="true">
           <boolProp name="LoopController.continue_forever">false</boolProp>
-          <stringProp name="LoopController.loops">50</stringProp>
+          <stringProp name="LoopController.loops">${__P(loops,50)}</stringProp>
         </elementProp>
-        <stringProp name="ThreadGroup.num_threads">5</stringProp>
-        <stringProp name="ThreadGroup.ramp_time">20</stringProp>
+        <stringProp name="ThreadGroup.num_threads">${__P(verification_threads,5)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(ramp_seconds,20)}</stringProp>
         <boolProp name="ThreadGroup.scheduler">false</boolProp>
         <stringProp name="ThreadGroup.duration"></stringProp>
         <stringProp name="ThreadGroup.delay"></stringProp>
@@ -120,12 +125,12 @@
             <collectionProp name="HTTPFileArgs.files">
               <elementProp name="${test_image_path}" elementType="HTTPFileArg">
                 <stringProp name="File.path">${test_image_path}</stringProp>
-                <stringProp name="File.paramname">file1</stringProp>
+                <stringProp name="File.paramname">source_image</stringProp>
                 <stringProp name="File.mimetype">image/jpeg</stringProp>
               </elementProp>
               <elementProp name="${test_image_path}" elementType="HTTPFileArg">
                 <stringProp name="File.path">${test_image_path}</stringProp>
-                <stringProp name="File.paramname">file2</stringProp>
+                <stringProp name="File.paramname">target_image</stringProp>
                 <stringProp name="File.mimetype">image/jpeg</stringProp>
               </elementProp>
             </collectionProp>
@@ -137,7 +142,7 @@
           <stringProp name="HTTPSampler.port"></stringProp>
           <stringProp name="HTTPSampler.protocol"></stringProp>
           <stringProp name="HTTPSampler.contentEncoding"></stringProp>
-          <stringProp name="HTTPSampler.path">${api_url}/api/v1/recognition/compare</stringProp>
+          <stringProp name="HTTPSampler.path">${api_url}/api/v1/verification/verify</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
@@ -152,7 +157,7 @@
             <collectionProp name="HeaderManager.headers">
               <elementProp name="" elementType="Header">
                 <stringProp name="Header.name">x-api-key</stringProp>
-                <stringProp name="Header.value">${api_key}</stringProp>
+                <stringProp name="Header.value">${verification_api_key}</stringProp>
               </elementProp>
             </collectionProp>
           </HeaderManager>

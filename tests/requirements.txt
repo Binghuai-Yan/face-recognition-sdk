@@ -1,0 +1,9 @@
+pytest>=8,<10
+pytest-asyncio>=0.24,<2
+PyYAML>=6,<7
+jsonschema>=4.26,<5
+openapi-spec-validator>=0.7,<1
+Pillow>=10,<13
+build>=1,<2
+setuptools>=70
+wheel>=0.44

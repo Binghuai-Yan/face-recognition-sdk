@@ -15,6 +15,7 @@ import com.facesdk.exception.NoFaceException;
 import com.facesdk.model.*;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import okhttp3.*;
 import org.slf4j.Logger;
@@ -25,6 +26,12 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Base64;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.stream.Collectors;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -52,6 +59,7 @@ public class FaceSDKClient {
 
     private OkHttpClient createHttpClient(FaceSDKConfig config) {
         OkHttpClient.Builder builder = new OkHttpClient.Builder()
+                .retryOnConnectionFailure(false)
                 .connectTimeout(config.getConnectTimeout())
                 .readTimeout(config.getReadTimeout())
                 .writeTimeout(config.getWriteTimeout())
@@ -61,16 +69,15 @@ public class FaceSDKClient {
             try {
                 // 信任所有证书（仅用于开发/测试）
                 javax.net.ssl.SSLContext sslContext = javax.net.ssl.SSLContext.getInstance("TLS");
-                sslContext.init(null, new javax.net.ssl.TrustManager[]{
-                        new javax.net.ssl.X509TrustManager() {
+                javax.net.ssl.X509TrustManager trustManager = new javax.net.ssl.X509TrustManager() {
                             public java.security.cert.X509Certificate[] getAcceptedIssuers() {
                                 return new java.security.cert.X509Certificate[]{};
                             }
                             public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
                             public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) {}
-                        }
-                }, new java.security.SecureRandom());
-                builder.sslSocketFactory(sslContext.getSocketFactory(), (javax.net.ssl.X509TrustManager) sslContext.getTrustManagers()[0]);
+                        };
+                sslContext.init(null, new javax.net.ssl.TrustManager[]{trustManager}, new java.security.SecureRandom());
+                builder.sslSocketFactory(sslContext.getSocketFactory(), trustManager);
                 builder.hostnameVerifier((hostname, session) -> true);
             } catch (Exception e) {
                 logger.warn("Failed to disable SSL verification", e);
@@ -116,12 +123,13 @@ public class FaceSDKClient {
                 .addFormDataPart("file", "image.jpg",
                         RequestBody.create(imageData, MEDIA_TYPE_JPEG));
 
+        HttpUrl.Builder url = Objects.requireNonNull(HttpUrl.parse(config.getApiUrl() + "/api/v1/detection/detect")).newBuilder();
         if (options != null) {
-            options.forEach((key, value) -> builder.addFormDataPart(key, String.valueOf(value)));
+            options.forEach((key, value) -> url.addQueryParameter(key, String.valueOf(value)));
         }
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/detection/detect")
+                .url(url.build())
                 .header("x-api-key", config.getApiKey())
                 .post(builder.build())
                 .build();
@@ -171,14 +179,14 @@ public class FaceSDKClient {
 
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file1", "image1.jpg",
+                .addFormDataPart("source_image", "image1.jpg",
                         RequestBody.create(imageData1, MEDIA_TYPE_JPEG))
-                .addFormDataPart("file2", "image2.jpg",
+                .addFormDataPart("target_image", "image2.jpg",
                         RequestBody.create(imageData2, MEDIA_TYPE_JPEG))
                 .build();
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/compare")
+                .url(config.getApiUrl() + "/api/v1/verification/verify")
                 .header("x-api-key", config.getApiKey())
                 .post(requestBody)
                 .build();
@@ -211,24 +219,26 @@ public class FaceSDKClient {
      */
     public SearchResult search(byte[] imageData, int limit, double threshold) throws FaceSDKException {
         logger.debug("Searching faces with limit={}", limit);
+        if (limit < 1 || !Double.isFinite(threshold) || threshold < 0 || threshold > 1) {
+            throw new FaceSDKException("Invalid search limit or threshold");
+        }
 
         MultipartBody.Builder builder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("file", "image.jpg",
-                        RequestBody.create(imageData, MEDIA_TYPE_JPEG))
-                .addFormDataPart("limit", String.valueOf(limit));
-
-        if (threshold > 0) {
-            builder.addFormDataPart("threshold", String.valueOf(threshold));
-        }
+                        RequestBody.create(imageData, MEDIA_TYPE_JPEG));
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/recognize")
+                .url(config.getApiUrl() + "/api/v1/recognition/recognize?prediction_count=" + limit)
                 .header("x-api-key", config.getApiKey())
                 .post(builder.build())
                 .build();
 
-        return executeWithRetry(request, SearchResult.class);
+        SearchResult result = executeWithRetry(request, SearchResult.class);
+        result.setResults(result.getResults().stream().filter(m -> m.getSimilarity() >= threshold)
+                .sorted(Comparator.comparingDouble(SearchResult.MatchResult::getSimilarity).reversed())
+                .collect(Collectors.toList()));
+        return result;
     }
 
     // ==================== 特征提取 ====================
@@ -249,17 +259,12 @@ public class FaceSDKClient {
                         RequestBody.create(imageData, MEDIA_TYPE_JPEG));
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/face")
+                .url(config.getApiUrl() + "/api/v1/detection/detect?face_plugins=calculator")
                 .header("x-api-key", config.getApiKey())
                 .post(builder.build())
                 .build();
 
-        try {
-            return executeWithRetry(request, String.class);
-        } catch (FaceSDKException e) {
-            // extractFeature returns a JSON with embedding, parse it
-            throw e;
-        }
+        return encodeEmbedding(executeWithRetry(request, JsonNode.class));
     }
 
     /**
@@ -281,12 +286,12 @@ public class FaceSDKClient {
                 .build();
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/face")
+                .url(config.getApiUrl() + "/api/v1/detection/detect?face_plugins=calculator")
                 .header("x-api-key", config.getApiKey())
                 .post(requestBody)
                 .build();
 
-        return executeWithRetry(request, String.class);
+        return encodeEmbedding(executeWithRetry(request, JsonNode.class));
     }
 
     // ==================== 人脸库管理 ====================
@@ -302,7 +307,9 @@ public class FaceSDKClient {
     public Subject createSubject(String subjectId, String subjectName) throws FaceSDKException {
         logger.debug("Creating subject: {} - {}", subjectId, subjectName);
 
-        String json = String.format("{\"subject\":\"%s\",\"name\":\"%s\"}", subjectId, subjectName);
+        String json;
+        try { json = objectMapper.writeValueAsString(Map.of("subject", subjectId)); }
+        catch (IOException e) { throw new FaceSDKException("Failed to encode subject", e); }
 
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
@@ -325,7 +332,7 @@ public class FaceSDKClient {
         logger.debug("Deleting subject: {}", subjectId);
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/subjects/" + subjectId)
+                .url(HttpUrl.get(config.getApiUrl() + "/api/v1/recognition/subjects").newBuilder().addPathSegment(validIdentifier(subjectId)).build())
                 .header("x-api-key", config.getApiKey())
                 .delete()
                 .build();
@@ -348,7 +355,15 @@ public class FaceSDKClient {
                 .get()
                 .build();
 
-        return executeWithRetry(request, List.class);
+        JsonNode data = executeWithRetry(request, JsonNode.class);
+        if (!data.path("subjects").isArray()) throw new ApiException("Missing subjects array", "INVALID_RESPONSE", 200);
+        List<Subject> subjects = new ArrayList<>();
+        for (JsonNode name : data.path("subjects")) {
+            Subject subject = new Subject();
+            subject.setSubjectId(name.isTextual() ? name.asText() : name.path("subject").asText());
+            subjects.add(subject);
+        }
+        return subjects;
     }
 
     // ==================== 人脸管理 ====================
@@ -364,22 +379,17 @@ public class FaceSDKClient {
      */
     public FaceRecord addFace(String subjectId, byte[] imageData, Map<String, Object> metadata) throws FaceSDKException {
         logger.debug("Adding face to subject: {}", subjectId);
+        if (metadata != null && !metadata.isEmpty()) {
+            throw new FaceSDKException("CompreFace 1.2 does not persist metadata; store it in your application");
+        }
 
         MultipartBody.Builder builder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("file", "image.jpg",
                         RequestBody.create(imageData, MEDIA_TYPE_JPEG));
 
-        if (metadata != null) {
-            try {
-                builder.addFormDataPart("metadata", objectMapper.writeValueAsString(metadata));
-            } catch (Exception e) {
-                logger.warn("Failed to serialize metadata", e);
-            }
-        }
-
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/faces?subject=" + subjectId)
+                .url(HttpUrl.get(config.getApiUrl() + "/api/v1/recognition/faces").newBuilder().addQueryParameter("subject", subjectId).build())
                 .header("x-api-key", config.getApiKey())
                 .post(builder.build())
                 .build();
@@ -397,7 +407,7 @@ public class FaceSDKClient {
         logger.debug("Deleting face: {}", faceId);
 
         Request request = new Request.Builder()
-                .url(config.getApiUrl() + "/api/v1/recognition/faces/" + faceId)
+                .url(HttpUrl.get(config.getApiUrl() + "/api/v1/recognition/faces").newBuilder().addPathSegment(validIdentifier(faceId)).build())
                 .header("x-api-key", config.getApiKey())
                 .delete()
                 .build();
@@ -410,17 +420,22 @@ public class FaceSDKClient {
     private <T> T executeWithRetry(Request request, Class<T> responseType) throws FaceSDKException {
         int attempts = 0;
         Exception lastException = null;
+        String path = request.url().encodedPath();
+        boolean safe = request.method().equals("GET") || request.method().equals("DELETE") ||
+                path.equals("/api/v1/detection/detect") || path.equals("/api/v1/verification/verify") ||
+                path.equals("/api/v1/recognition/recognize");
+        int retries = safe ? config.getMaxRetries() : 0;
 
-        while (attempts <= config.getMaxRetries()) {
+        while (attempts <= retries) {
             try {
-                return execute(request, responseType);
+                return execute(request, responseType, attempts < retries);
             } catch (IOException e) {
                 lastException = e;
                 attempts++;
-                if (attempts <= config.getMaxRetries()) {
+                if (attempts <= retries) {
                     logger.warn("Request failed (attempt {}/{}), retrying...", attempts, config.getMaxRetries() + 1);
                     try {
-                        Thread.sleep(config.getRetryDelay().toMillis());
+                        Thread.sleep(config.getRetryDelay().toMillis() * (1L << (attempts - 1)));
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
                         throw new FaceSDKException("Retry interrupted", ie);
@@ -429,14 +444,21 @@ public class FaceSDKClient {
             }
         }
 
-        throw new ApiException("Request failed after " + (config.getMaxRetries() + 1) + " attempts", lastException);
+        throw new ApiException("Request failed after " + (retries + 1) + " attempts", lastException);
     }
 
-    private <T> T execute(Request request, Class<T> responseType) throws IOException, FaceSDKException {
+    private <T> T execute(Request request, Class<T> responseType, boolean canRetry) throws IOException, FaceSDKException {
+        String service = request.url().pathSegments().get(2);
+        String key = config.getApiKey(service);
+        if (key == null || key.isBlank()) throw new ApiException("Missing API key for " + service, "AUTHENTICATION_ERROR", 401);
+        request = request.newBuilder().header("x-api-key", key).build();
         try (Response response = httpClient.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
 
             if (!response.isSuccessful()) {
+                if (canRetry && (response.code() == 429 || response.code() == 500 || response.code() == 502 || response.code() == 503 || response.code() == 504)) {
+                    throw new IOException("Transient HTTP " + response.code());
+                }
                 handleErrorResponse(response.code(), responseBody);
             }
 
@@ -444,8 +466,90 @@ public class FaceSDKClient {
                 return null;
             }
 
-            return objectMapper.readValue(responseBody, responseType);
+            try {
+                JsonNode data = objectMapper.readTree(responseBody);
+                if (data == null || !data.isObject()) throw new ApiException("API returned invalid JSON", "INVALID_RESPONSE", response.code());
+                if (responseType == DetectionResult.class) return responseType.cast(parseDetection(data));
+                if (responseType == SearchResult.class) return responseType.cast(parseSearch(data));
+                if (responseType == CompareResult.class) return responseType.cast(parseComparison(data));
+                return objectMapper.treeToValue(data, responseType);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new ApiException("API returned invalid JSON", e);
+            }
         }
+    }
+
+    private static String validIdentifier(String value) {
+        if (value == null || value.isEmpty() || value.equals(".") || value.equals("..")) {
+            throw new FaceSDKException("Identifier must not be empty or a dot segment");
+        }
+        return value;
+    }
+
+    private Face parseFace(JsonNode data) throws IOException {
+        Face face = objectMapper.treeToValue(data, Face.class);
+        face.setConfidence(data.path("confidence").asDouble(data.path("box").path("probability").asDouble()));
+        return face;
+    }
+
+    private DetectionResult parseDetection(JsonNode data) throws IOException {
+        JsonNode values = data.has("result") ? data.get("result") : data.path("faces");
+        if (!values.isArray()) throw new ApiException("Missing detection result array", "INVALID_RESPONSE", 200);
+        List<Face> faces = new ArrayList<>();
+        for (JsonNode value : values) faces.add(parseFace(value));
+        DetectionResult result = new DetectionResult();
+        result.setFaces(faces);
+        result.setFaceCount(faces.size());
+        return result;
+    }
+
+    private SearchResult parseSearch(JsonNode data) throws IOException {
+        JsonNode faces = data.path("result");
+        if (!faces.isArray()) throw new ApiException("Missing recognition result array", "INVALID_RESPONSE", 200);
+        List<SearchResult.MatchResult> matches = new ArrayList<>();
+        for (JsonNode face : faces) {
+            for (JsonNode subject : face.path("subjects")) {
+                SearchResult.MatchResult match = new SearchResult.MatchResult();
+                match.setSubjectId(subject.path("subject").asText());
+                match.setSimilarity(subject.path("similarity").asDouble());
+                match.setMatch(true);
+                match.setFace(parseFace(face));
+                matches.add(match);
+            }
+        }
+        SearchResult result = new SearchResult();
+        result.setFaceCount(faces.size());
+        result.setResults(matches);
+        return result;
+    }
+
+    private CompareResult parseComparison(JsonNode data) throws IOException {
+        JsonNode sources = data.path("result");
+        if (!sources.isArray()) throw new ApiException("Missing verification result array", "INVALID_RESPONSE", 200);
+        if (sources.isEmpty() || sources.get(0).path("face_matches").isEmpty()) throw new NoFaceException("No face detected in the image");
+        JsonNode matches = sources.get(0).path("face_matches");
+        if (sources.size() != 1 || matches.size() != 1) {
+            throw new ApiException("Comparison requires exactly one face in each image", "VALIDATION_ERROR", 400);
+        }
+        CompareResult result = new CompareResult();
+        result.setSimilarity(matches.get(0).path("similarity").asDouble());
+        result.setThreshold(config.getComparisonThreshold());
+        result.setMatch(result.getSimilarity() >= result.getThreshold());
+        result.setFace1(parseFace(sources.get(0).path("source_image_face")));
+        result.setFace2(parseFace(matches.get(0)));
+        return result;
+    }
+
+    private String encodeEmbedding(JsonNode data) {
+        JsonNode faces = data.path("result");
+        if (!faces.isArray()) throw new ApiException("Missing detection result array", "INVALID_RESPONSE", 200);
+        if (faces.isEmpty()) throw new NoFaceException("No face detected in the image");
+        if (faces.size() != 1) throw new FaceSDKException("Feature extraction requires exactly one face");
+        JsonNode values = faces.get(0).path("embedding");
+        if (!values.isArray() || values.isEmpty()) throw new ApiException("Calculator plugin did not return an embedding", "NO_EMBEDDING", 200);
+        ByteBuffer buffer = ByteBuffer.allocate(values.size() * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        for (JsonNode value : values) buffer.putFloat((float) value.asDouble());
+        return Base64.getEncoder().encodeToString(buffer.array());
     }
 
     private void handleErrorResponse(int statusCode, String responseBody) throws FaceSDKException {

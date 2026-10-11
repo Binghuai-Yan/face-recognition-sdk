@@ -47,6 +47,7 @@ setup(
     install_requires=[
         "requests>=2.28.0",
         "aiohttp>=3.8.0",
+        "aiofiles>=23.1.0",
         "urllib3>=1.26.0",
     ],
     extras_require={
@@ -57,11 +58,6 @@ setup(
             "black>=23.0.0",
             "flake8>=6.0.0",
             "mypy>=1.0.0",
-        ],
-    },
-    entry_points={
-        "console_scripts": [
-            "facesdk=facesdk.cli:main",
         ],
     },
     include_package_data=True,
